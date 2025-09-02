@@ -48,6 +48,17 @@ void App::initWindow()
 
 void App::initVulkan()
 {
+    createInstance();
+    setupDebugMessenger();
+}
+
+void App::createInstance()
+{
+    // 1. 先检查是否支持验证层
+    if (enabledValidationLayers && !checkValidationLayerSupport())
+    {
+        throw std::runtime_error("validation layers requested, but not available!");
+    }
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -60,20 +71,54 @@ void App::initVulkan()
     // 获取GLFW所需的实例扩展：扩展是指在创建Vulkan实例时需要启用的功能（有些功能可能默认不启用）
     uint32_t glfwExtensionCount = 0;
     const char **glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    // 3. 开启扩展 debugUtils：更多调试功能
+    std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+    if (enabledValidationLayers)
+    {
+        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    }
 
     VkInstanceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledExtensionCount = glfwExtensionCount;
-    createInfo.ppEnabledExtensionNames = glfwExtensions;
-    createInfo.enabledLayerCount = 0; // 验证层
-    createInfo.ppEnabledLayerNames = nullptr;
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    createInfo.ppEnabledExtensionNames = extensions.data();
+    // 2. 开启验证层
+    if (enabledValidationLayers)
+    {
+        createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+        createInfo.ppEnabledLayerNames = validationLayers.data();
 
+        // 为了能够完整包裹实例，在这里创建 UtilsMessengerCreateInfo 让实例的pnext持有
+        // 这里的写法是 C风格的，临时对象会被复制到内部内存，不会依赖原始对象的生命周期
+        VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo{};
+        populateDebugMessengerCreateInfo(debugUtilsMessengerCreateInfo);
+        createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugUtilsMessengerCreateInfo; // pnext字段:实例创建后,将额外的配置信息 链接到 主结构体
+    }
+    else
+    {
+        createInfo.enabledLayerCount = 0; // 验证层
+        createInfo.ppEnabledLayerNames = nullptr;
+    }
+
+#define PRINT_EXTENSIONS 1
+#if PRINT_EXTENSIONS
     // 打印看看需要什么扩展
     for (int index = 0; index < glfwExtensionCount; index++)
     {
         std::cout << "GLFW Extension: " << glfwExtensions[index] << std::endl;
     }
+    // 测试一下 vulkan的持久化写法真的有吗？
+    if (createInfo.pNext != nullptr)
+    {
+        // 这里可以进行一些调试输出，查看 pNext 的内容
+        std::cout << "Debug Utils Messenger Create Info is set up." << std::endl;
+        // const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo = reinterpret_cast<const VkDebugUtilsMessengerCreateInfoEXT *>(createInfo.pNext);
+        const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo = (VkDebugUtilsMessengerCreateInfoEXT*)(createInfo.pNext);
+        std::cout << "Message Severity: " << pCreateInfo->messageSeverity << std::endl;
+        std::cout << "Message Type: " << pCreateInfo->messageType << std::endl;
+    }
+#endif
 
     // CreateInstance:
     // 1. 创建 Vulkan 实例
@@ -88,18 +133,121 @@ void App::initVulkan()
         {
         case VK_ERROR_OUT_OF_HOST_MEMORY:
             std::cout << "failed to create Vulkan instance: out of host memory" << std::endl;
+            break;
         case VK_ERROR_OUT_OF_DEVICE_MEMORY:
             std::cout << "failed to create Vulkan instance: out of device memory" << std::endl;
+            break;
         case VK_ERROR_INITIALIZATION_FAILED:
             std::cout << "failed to create Vulkan instance: initialization failed" << std::endl;
+            break;
         case VK_ERROR_INCOMPATIBLE_DRIVER:
             std::cout << "failed to create Vulkan instance: incompatible driver" << std::endl;
+            break;
         case VK_ERROR_EXTENSION_NOT_PRESENT:
             std::cout << "failed to create Vulkan instance: extension not present" << std::endl;
+            break;
         default:
             std::cout << "failed to create Vulkan instance: unknown error" << std::endl;
         }
     }
+}
+
+bool App::checkValidationLayerSupport()
+{
+    // 1. 获取 实例 可用的验证层数量
+    uint32_t availableLayerCount = 0;
+    vkEnumerateInstanceLayerProperties(&availableLayerCount, nullptr);
+    // 2. 创建 验证层属性 列表，然后再调用，获取 可用的验证层属性
+    std::vector<VkLayerProperties> availableLayers(availableLayerCount);
+    vkEnumerateInstanceLayerProperties(&availableLayerCount, availableLayers.data());
+
+    // 3. 检查 想要的验证层，实例是否支持
+    for (const char *layerName : validationLayers)
+    {
+        bool layerFound = false;
+        for (const auto &layerProperties : availableLayers) // 检查这个验证层 是否在可用列表中
+        {
+            if (strcmp(layerName, layerProperties.layerName) == 0)
+            {
+                layerFound = true;
+                break;
+            }
+        }
+        if (!layerFound)
+        {
+            return false; // 每找到直接返回false
+        }
+    }
+    return true;
+}
+
+void App::setupDebugMessenger()
+{
+    if (enabledValidationLayers == false)
+        return;
+
+    // 1. 填充 createinfo
+    VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo;
+    populateDebugMessengerCreateInfo(debugUtilsMessengerCreateInfo);
+
+    // 2. 调用函数，创建 debugUtilsMessenger
+    if (createDebugUtilsMessenger(m_instance, &debugUtilsMessengerCreateInfo, nullptr, &m_debugMessenger) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to set up debug messenger!");
+    }
+}
+
+void App::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &debugUtilsMessenger)
+{
+    debugUtilsMessenger = {};
+    debugUtilsMessenger.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    // 接收的严重性
+    debugUtilsMessenger.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    // 接收的消息类型
+    debugUtilsMessenger.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+
+    // 指定回调函数
+    debugUtilsMessenger.pfnUserCallback = debugCallback;
+
+    debugUtilsMessenger.pUserData = nullptr; // 可以通过这个参数传递自定义数据到回调函数
+}
+
+VkResult App::createDebugUtilsMessenger(VkInstance instance, VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo, VkAllocationCallbacks *pAllocator, VkDebugUtilsMessengerEXT *pMessenger)
+{
+    // 去实例中找(创建xxx)函数,并调用它(PFN是函数指针)
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    if (func == nullptr)
+    {
+        // throw std::runtime_error("failed to get vkCreateDebugUtilsMessengerEXT function address!");
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+    else
+    {
+        return func(instance, pCreateInfo, pAllocator, pMessenger);
+    }
+    // return VK_ERROR_EXTENSION_NOT_PRESENT;
+}
+
+void App::destroyDebugUtilsMessenger(VkInstance instance, VkDebugUtilsMessengerEXT messenger, VkAllocationCallbacks *pAllocator)
+{
+    // 去找函数指针
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (func != nullptr)
+    {
+        func(instance, messenger, pAllocator);
+    }
+}
+
+VKAPI_ATTR VkBool32 VKAPI_CALL App::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)
+{
+    // VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT //根据严重性级别选择处理方式
+    if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    {
+        std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl; // 大于warning才输出
+        // pCallbackData->pObjects[0]; // 这里可以获取到触发验证的对象信息/报错的对象
+        return VK_TRUE;
+    }
+    return VK_FALSE;
 }
 
 void App::cleanupALL()
@@ -109,7 +257,13 @@ void App::cleanupALL()
 
 void App::cleanupWindow()
 {
+    if (enabledValidationLayers)
+    {
+        destroyDebugUtilsMessenger(m_instance, m_debugMessenger, nullptr);
+    }
+
     vkDestroyInstance(m_instance, nullptr);
+    // vkDestroyInstance(m_instance, nullptr); //测试
 
     glfwDestroyWindow(window);
     glfwTerminate();

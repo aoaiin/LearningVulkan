@@ -24,3 +24,56 @@
 - VkInstanceCreateInfo：创建 vk 所需要的 InstanceCreateInfo 信息；
   - VkApplicationInfo ：vk 实例运行的 App 的信息：App 的名称、版本，使用的 API 版本，App 基于的引擎
   - glfwGetRequiredInstanceExtensions：获取 vulkan 需要开启的扩展功能来支持 glfw
+
+## 2. 开启验证层
+
+> 扩展：增加原来不支持的一些新功能
+>
+> 验证层：类似增加一层，让 vulkan 的报错有更多的输出/调试信息。> :可以有很多细分：如兼容验证层、开发层、性能层（检查 api 使用）
+
+> 核心验证层：检查 API 函数合法性，函数参数，调用是否正确；
+> 资源泄漏检查；扩展服务检查；跟踪对象生命周期；
+
+这一节
+
+1. 启用验证层
+2. 启用扩展 DebugUtils：创建 DebugUtilsMessenger：输出更多信息
+
+### 启用验证层
+
+1. 宏定义是否开启验证层
+2. vector:存储需要使用的验证层（这里用的 VK_LAYER_KHRONOS_validation: 综合性验证层，包含多种验证功能）
+3. 函数：
+   - 检查验证层是否支持：checkValidationLayerSupport ：遍历 vk 实例支持的验证层 和 需要使用的验证层
+
+然后 createInstance 时，判断是否支持验证层，在 InstanceCreateInfo 中对应字段填充 **启用的验证层数量、名字**
+
+### DebugUtils
+
+1. 在查询需要的扩展时，加入 "VK_EXT_debug_utils"(宏 VK_EXT_DEBUG_UTILS_EXTENSION_NAME)
+2. 创建 VkDebugUtilsMessengerEXT 对象：创建、销毁等等函数
+   - setup：填充对应的 VkDebugUtilsMessengerCreateInfoEXT、调用生成函数
+     - 填充：在 CreateInfo 字段中 写上 **回调函数 debugCallback**
+     - create 函数：**查找 vk 实例的 vkCreateDebugUtilsMessengerEXT 函数，找到函数指针**，调用。
+   - destroy 销毁：查找 vk 实例的销毁函数的函数指针，调用
+   - 回调函数 debugCallback：参数包括 messenge 严重性、类型、messenge 回调数据、userdata
+
+> Note:
+>
+> 1. 回调函数前面有一些宏 VKAPI_CALL -> `__stdcall`
+> 2. vkGetInstanceProcAddr 去找 vk 实例的函数，获取函数指针然后调用
+> 3. 创建的过程好像 都是有个 CreateInfo 结构体，然后去创建实例
+
+#### 问题
+
+这样创建的 debugUtilsMessenger，并没有完整包裹 vk 实例：在创建之后创建，销毁之前销毁了 DebugUtilsMessenger。
+
+这里 选择了在 createInfo 的 pNext 字段填充了 一个 VkDebugUtilsMessengerCreateInfoEXT：
+它会将这个额外配置信息，链接到 createInfo 主结构体之后（扩展机制）
+
+> Note:
+>
+> 1. pNext 字段会将额外的配置信息，链接在主结构体，形成链表，Vulkan 驱动会遍历这个链表，处理每个扩展结构体。
+> 2. vulkan API 调用函数的时候，**会将 临时创建结构体传递给函数，函数内部会处理数据持久化**。不会有空指针的问题
+>
+> 写了个测试，好像还真有（;
