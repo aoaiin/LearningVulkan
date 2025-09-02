@@ -50,6 +50,7 @@ void App::initVulkan()
 {
     createInstance();
     setupDebugMessenger();
+    pickupPhysicalDevice();
 }
 
 void App::createInstance()
@@ -114,7 +115,7 @@ void App::createInstance()
         // 这里可以进行一些调试输出，查看 pNext 的内容
         std::cout << "Debug Utils Messenger Create Info is set up." << std::endl;
         // const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo = reinterpret_cast<const VkDebugUtilsMessengerCreateInfoEXT *>(createInfo.pNext);
-        const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo = (VkDebugUtilsMessengerCreateInfoEXT*)(createInfo.pNext);
+        const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo = (VkDebugUtilsMessengerCreateInfoEXT *)(createInfo.pNext);
         std::cout << "Message Severity: " << pCreateInfo->messageSeverity << std::endl;
         std::cout << "Message Type: " << pCreateInfo->messageType << std::endl;
     }
@@ -236,6 +237,51 @@ void App::destroyDebugUtilsMessenger(VkInstance instance, VkDebugUtilsMessengerE
     {
         func(instance, messenger, pAllocator);
     }
+}
+
+void App::pickupPhysicalDevice()
+{
+    // 1. 支持vulkan的设置数量
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
+    if (deviceCount == 0)
+    {
+        throw std::runtime_error("failed to find GPUs with Vulkan support!");
+    }
+
+    // 2. 获取所有支持vulkan的物理设备
+    std::vector<VkPhysicalDevice> devices(deviceCount);
+    vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
+    for (const auto &device : devices)
+    {
+        if (isDeviceSuitable(device))
+        {
+            m_physicalDevice = device; // 取合适的设备
+            break;
+        }
+    }
+    if (m_physicalDevice == nullptr)
+    {
+        // 如果最后每找到，则抛出异常
+        throw std::runtime_error("failed to find a suitable GPU!");
+    }
+}
+
+bool App::isDeviceSuitable(VkPhysicalDevice device)
+{
+    // 获取设备属性和特性
+    VkPhysicalDeviceProperties deviceProperties;
+    vkGetPhysicalDeviceProperties(device, &deviceProperties);
+    VkPhysicalDeviceFeatures deviceFeatures;
+    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+    // 打印设备名称
+    std::cout << "Device Name: " << deviceProperties.deviceName << std::endl;
+
+    // 设备是  离散/独立 显卡(设备类型)
+    // 设备支持 几何着色器(设备特性)
+    return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) &&
+           deviceFeatures.geometryShader;
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL App::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)

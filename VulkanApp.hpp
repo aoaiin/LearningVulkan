@@ -57,6 +57,12 @@ private:
     // 销毁 debugUtils ： 去找销毁debugUtils的函数指针，调用
     void destroyDebugUtilsMessenger(VkInstance instance, VkDebugUtilsMessengerEXT messenger, VkAllocationCallbacks *pAllocator);
 
+    // -------------- 物理硬件 --------------
+    // 选取合适的设备
+    void pickupPhysicalDevice();
+    // 判断 物理设备是否合适
+    bool isDeviceSuitable(VkPhysicalDevice device);
+
 private:
     // debug回调函数
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
@@ -74,4 +80,6 @@ private:
     GLFWwindow *window;
     VkInstance m_instance;
     VkDebugUtilsMessengerEXT m_debugMessenger;
+
+    VkPhysicalDevice m_physicalDevice;
 };
