@@ -188,4 +188,47 @@
 
 ---
 
-##
+## 窗口表面 Surface
+
+Vulkan 并不支持创建窗口相关功能，使用 glfw 创建窗口，而 Surface 类似一个中间层，连接起来
+
+> Surface 功能：
+>
+> 1. 抽象窗口系统差异
+> 2. 绑定物理窗口：获取实际窗口的句柄
+> 3. 作为交换链的基础
+
+> WSI：窗口系统集成
+> 也是一个扩展，在不同平台上有不同的扩展名
+
+> 实际上 Surface 是和 WSI 平台的窗口系统进行交互
+> 交互流程：
+>
+> 1. 绑定原生窗口
+> 2. 协商显示参数
+> 3. 缓冲区交换：vulkan 将渲染数据给 Surface->WSI->具体的物理窗口
+
+> 在最开始创建 vk 实例中，其实获取 glfw 需要的实例扩展时，就是这两个，并且写入了 createInfo 的字段 开启
+
+> 呈现队列（Present Queue）用于将 Vulkan 渲染的图像提交到窗口表面（Surface），实现屏幕显示
+> 类似 将交换链中的图像显示到窗口
+
+### 实现
+
+VkSurfaceKHR
+
+> KHR 表示 Khronos Group 定义的全局扩展
+> EXT 也是扩展
+
+创建 Surface 的两类方法：
+
+1. 平台相关的：如 Windows 相关的 createInfo
+2. 用 glfw 封装好的，创建 surface
+
+然后需要一个**呈现队列**（**物理队列族是否支持 Surface**），记录 index
+
+然后在创建逻辑设备时，传入 创建 呈现队列的 index
+
+> 检查是否支持 present 的时候(vkGetPhysicalDeviceSurfaceSupportKHR)，需要传入 surface，因此注意创建的顺序
+>
+> 创建 vk 实例、创建 debugUtils、创建 Surface、选取物理设备、创建逻辑设备

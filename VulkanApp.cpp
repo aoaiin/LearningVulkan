@@ -50,6 +50,9 @@ void App::initVulkan()
 {
     createInstance();
     setupDebugMessenger();
+
+    createSurface();
+
     pickupPhysicalDevice();
     createLogicalDevice();
 }
@@ -103,7 +106,7 @@ void App::createInstance()
         createInfo.ppEnabledLayerNames = nullptr;
     }
 
-#define PRINT_EXTENSIONS 1
+#define PRINT_EXTENSIONS 0
 #if PRINT_EXTENSIONS
     // 打印看看需要什么扩展
     for (int index = 0; index < glfwExtensionCount; index++)
@@ -306,6 +309,20 @@ queueFamily App::findQueueFamilies(VkPhysicalDevice device)
         {
             foundQueueFamily.graphicsQueueFamily = index; // 记录 图形队列族 索引
         }
+
+        // 物理设备是否支持 Surface/呈现
+        VkBool32 presentSupport = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, index, m_surface, &presentSupport);
+        if (presentSupport)
+        {
+            foundQueueFamily.presentQueueFamily = index; // 记录 呈现队列族 索引
+        }
+
+        if (foundQueueFamily.isComplete())
+        {
+            break; // 找到就退出
+        }
+
         index++;
     }
     return foundQueueFamily; // 返回找到的队列族
@@ -313,7 +330,7 @@ queueFamily App::findQueueFamilies(VkPhysicalDevice device)
 
 void App::createLogicalDevice()
 {
-    std::set<uint32_t> indices = {m_queueFamily.graphicsQueueFamily.value()};
+    std::set<uint32_t> indices = {m_queueFamily.graphicsQueueFamily.value(), m_queueFamily.presentQueueFamily.value()};
     // 1. 逻辑设备 使用的队列createInfo
     float priority = 1.0f;
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
@@ -346,6 +363,32 @@ void App::createLogicalDevice()
 
     // 4. 获取 逻辑设备的 队列
     vkGetDeviceQueue(m_LogicalDevice, m_queueFamily.graphicsQueueFamily.value(), 0, &m_graphicsQueue);
+    vkGetDeviceQueue(m_LogicalDevice, m_queueFamily.presentQueueFamily.value(), 0, &m_presentQueue);
+}
+
+// Windows: VK_KHR_win32_surface
+// Linux: VK_KHR_xlib_surface
+// Android: VK_KHR_android_surface
+void App::createSurface()
+{
+    // 两种方式创建：
+    // 1. 与平台相关，如Windows相关的createInfo
+    // 2. 用glfw封装好的
+
+    // // Windows
+    // VkWin32SurfaceCreateInfoKHR createInfo{};
+    // createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    // createInfo.hwnd = glfwGetWin32Window(window);
+    // createInfo.hinstance = GetModuleHandle(nullptr);
+    // if (vkCreateWin32SurfaceKHR(m_instance, &createInfo, nullptr, &m_surface) != VK_SUCCESS)
+    // {
+    //     throw std::runtime_error("failed to create window surface!");
+    // }
+
+    if (glfwCreateWindowSurface(m_instance, window, nullptr, &m_surface) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create window surface!");
+    }
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL App::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)
@@ -362,10 +405,11 @@ VKAPI_ATTR VkBool32 VKAPI_CALL App::debugCallback(VkDebugUtilsMessageSeverityFla
 
 void App::cleanupALL()
 {
+    cleanupVulkan();
     cleanupWindow();
 }
 
-void App::cleanupWindow()
+void App::cleanupVulkan()
 {
     vkDestroyDevice(m_LogicalDevice, nullptr);
 
@@ -374,8 +418,14 @@ void App::cleanupWindow()
         destroyDebugUtilsMessenger(m_instance, m_debugMessenger, nullptr);
     }
 
+    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+
     vkDestroyInstance(m_instance, nullptr);
     // vkDestroyInstance(m_instance, nullptr); //测试
+}
+
+void App::cleanupWindow()
+{
 
     glfwDestroyWindow(window);
     glfwTerminate();

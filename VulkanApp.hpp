@@ -39,9 +39,11 @@ struct queueFamily
 {
     std::optional<uint32_t> graphicsQueueFamily; // 图形队列族 索引(可能存在,可能不存在)
 
+    std::optional<uint32_t> presentQueueFamily; // 呈现队列族 索引
+
     bool isComplete()
     {
-        return graphicsQueueFamily.has_value();
+        return graphicsQueueFamily.has_value() && presentQueueFamily.has_value();
     }
 };
 
@@ -76,11 +78,14 @@ private:
     // 判断 物理设备是否合适 ，查找/获取 物理设备的队列族
     bool isDeviceSuitable(VkPhysicalDevice device);
     //
-    // 查找 物理设备 支持的 队列族
+    // 查找 物理设备 支持的 队列族 : 图形graphics、呈现present
     queueFamily findQueueFamilies(VkPhysicalDevice device);
 
     // 创建 逻辑设备
     void createLogicalDevice();
+
+    //
+    void createSurface();
 
 private:
     // debug回调函数
@@ -92,6 +97,7 @@ private:
 
 private:
     void cleanupALL();
+    void cleanupVulkan();
     void cleanupWindow();
 
 private:
@@ -102,8 +108,10 @@ private:
 
     VkPhysicalDevice m_physicalDevice;
     VkDevice m_LogicalDevice;
+    VkSurfaceKHR m_surface;
 
     VkQueue m_graphicsQueue;
+    VkQueue m_presentQueue;
 
 private:
     queueFamily m_queueFamily;
