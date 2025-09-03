@@ -359,3 +359,10 @@ VkSurfaceKHR
 2. 创建 RenderPass： 颜色附件描述、subpass 描述，然后创建
 
 ### Pipeline Cache 保存管线配置
+
+vkCreateGraphicsPipelines 的第二个参数是 pipelinecache；
+
+可以 创建 VkPipelineCache （VkPipelineCacheCreateInfo） ：将创建的管线 缓存下来，下次直接加载
+如果生成失败，则继续用原来的 VK_NULL_HANDLE，创建图形管线
+
+> 并且添加 pipelinecache 的路径，readfile/writefile 函数

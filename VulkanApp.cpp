@@ -747,9 +747,9 @@ void App::createRenderPass()
     }
 }
 
-std::vector<char> App::readFile(const std::string &filename)
+std::vector<char> App::readFile(const std::string &filepath)
 {
-    std::ifstream file(filename, std::ios::ate | std::ios::binary); // 打开文件: 以二进制方式读取, ate:打开就移动到末尾
+    std::ifstream file(filepath, std::ios::ate | std::ios::binary); // 打开文件: 以二进制方式读取, ate:打开就移动到末尾
     if (!file.is_open())
     {
         throw std::runtime_error("failed to open file!");
@@ -760,7 +760,21 @@ std::vector<char> App::readFile(const std::string &filename)
     std::vector<char> filedata(fileSize);
     file.read(filedata.data(), fileSize); // 读取文件数据 0~fileSize
 
+    file.close();
+
     return filedata;
+}
+
+void App::writeFile(const std::string &filepath, const std::vector<char> &data, size_t dataSize)
+{
+    std::ofstream file(filepath, std::ios::out | std::ios::binary);
+    if (!file.is_open())
+    {
+        throw std::runtime_error("failed to open file: " + filepath);
+    }
+
+    file.write(data.data(), dataSize);
+    file.close();
 }
 
 void App::createGraphicsPipeline()
@@ -913,11 +927,42 @@ void App::createGraphicsPipeline()
     pipelineInfo.layout = m_pipelineLayout;
     pipelineInfo.renderPass = m_renderPass;
     pipelineInfo.subpass = 0;
-    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // 表示图形管线创建时可选的基础管线句柄，用于在创建新管线时继承或重用现有管线的状态
 
-    if (vkCreateGraphicsPipelines(m_LogicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS)
+    //
+    // 使用pipelinecache
+    std::vector<char> cacheData = readFile(pipelineCacheFile);
+    VkPipelineCacheCreateInfo pipelineCacheInfo{};
+    pipelineCacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+    pipelineCacheInfo.initialDataSize = cacheData.size();
+    pipelineCacheInfo.pInitialData = cacheData.data();
+    VkPipelineCache cache;
+
+    if (vkCreatePipelineCache(m_LogicalDevice, &pipelineCacheInfo, nullptr, &cache) == VK_SUCCESS)
     {
-        throw std::runtime_error("failed to create graphics pipeline!");
+        // 这里的第二个参数 VkPipelineCache：可以将创建的管线 缓存下来，下次直接加载
+        if (vkCreateGraphicsPipelines(m_LogicalDevice, cache, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create graphics pipeline!");
+        }
+
+        size_t cacheSize = 0;
+        vkGetPipelineCacheData(m_LogicalDevice, cache, &cacheSize, nullptr);
+        std::vector<char> cacheData(cacheSize);
+        vkGetPipelineCacheData(m_LogicalDevice, cache, &cacheSize, cacheData.data());
+
+        // 将缓存数据写入文件
+        writeFile(pipelineCacheFile, cacheData, cacheSize);
+
+        vkDestroyPipelineCache(m_LogicalDevice, cache, nullptr);
+    }
+    else
+    {
+        // 如果创建pipelinecache失败，则不使用
+        if (vkCreateGraphicsPipelines(m_LogicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create graphics pipeline!");
+        }
     }
 
     vkDestroyShaderModule(m_LogicalDevice, fragShaderModule, nullptr);

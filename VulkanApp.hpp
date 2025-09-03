@@ -17,6 +17,8 @@ VK_LAYER_LUNARG_swapchain: 交换链验证层，检查与交换链相关的操�
 VK_LAYER_LUNARG_threading: 线程验证层，检查多线程环境下的API使用
 */
 
+const std::string pipelineCacheFile = "../cache/pipelineConfig.config"; // 管道缓存文件路径,最好先创建个空的
+
 #ifdef NDEBUG
 const bool enabledValidationLayers = false;
 #else
@@ -119,7 +121,8 @@ private:
     void createRenderPass();
 
 private:
-    static std::vector<char> readFile(const std::string &filename);
+    static std::vector<char> readFile(const std::string &filepath);
+    static void writeFile(const std::string &filepath, const std::vector<char> &data, size_t dataSize);
 
 private:
     // debug回调函数
