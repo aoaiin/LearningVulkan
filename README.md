@@ -295,3 +295,47 @@ VkSurfaceKHR
    - VkImageViewCreateInfo 、vkCreateImageView
 
 ---
+
+---
+
+## Vulkan 图形管线
+
+> 1. 不可改变：管线的所有状态 创建时就确定，运行时无法修改。如果要切换，必须重新创建。
+> 2. 预优化： 驱动在管线创建时 就知道所有状态，可以深度优化
+> 3. 显式：状态 必须显式配置
+
+### 可编程阶段
+
+着色器模块 VkShaderModule ：
+连接 高级着色器代码如 glsl 和 gpu ，**封装了 SPIR-V 中间语言字节码**
+
+> SPIR-V (Standard Portable Intermediate Representation -Version 5)
+>
+> 1. 由 32 位指令组成，类似“汇编指令”
+> 2. 包含调试信息，
+> 3. 支持模块化编译，多个着色器合并为一个 SPIR-V 模块
+
+> VkShaderModule
+>
+> 1. 只存储 SPIR-V 二进制代码
+> 2. 无状态性
+> 3. 可复用性
+
+1. ReadFile 静态函数：用来读取文件
+2. **CreateShaderModule**：填写 VkShaderModule 的 createInfo，然后去创建
+
+> - compile 脚本：调用 VulkanSDK/bin 的 glslc.exe 程序编译得到 .spv 文件
+
+3. **CreateGraphicsPipeline**：
+   - 读取 spv 文件 ，创建 VkShaderModule；
+   - `VkPipelineShaderStageCreateInfo` **各阶段 Stage** ：如 Vertex、Fragment
+
+### 固定功能状态 / 动态状态
+
+> 设置 一些不可编程阶段 的状态
+
+主要在 createGraphicsPipeline 中对各个 CreateInfo 设置
+
+动态状态：一般创建好的管线不能进行修改，需要重新创建管线.
+设置的动态状态 ：可以在运行过程中修改
+`VkPipelineDynamicStateCreateInfo`

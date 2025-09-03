@@ -1,5 +1,6 @@
 #include "VulkanApp.hpp"
 #include <algorithm>
+#include <fstream>
 
 App::App()
     : App({800, 600, "Vulkan App"})
@@ -484,7 +485,7 @@ void App::createSwapChain()
     }
 
     m_swapChainImageFormat = surfaceFormat.format;
-    m_swapChainExtent = swapExtent;
+    m_swapChainImageExtent = swapExtent;
 }
 
 SwapChainDetails App::querySwapChainSupport(VkPhysicalDevice device)
@@ -661,4 +662,183 @@ void App::cleanupWindow()
 
     glfwDestroyWindow(window);
     glfwTerminate();
+}
+
+VkShaderModule App::createShaderModule(const std::vector<char> &code)
+{
+    // 1. 填写 ShaderModule 的 createInfo
+    VkShaderModuleCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = code.size();
+    createInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
+
+    // 2. 创建
+    VkShaderModule shaderModule;
+    VkResult result;
+    if ((result = vkCreateShaderModule(m_LogicalDevice, &createInfo, nullptr, &shaderModule)) != VK_SUCCESS)
+    {
+        switch (result) // 错误原因打印
+        {
+        case VK_ERROR_OUT_OF_HOST_MEMORY:
+            std::cout << "failed to create shader module: out of host memory" << std::endl;
+            break;
+        case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+            std::cout << "failed to create shader module: out of device memory" << std::endl;
+            break;
+        case VK_ERROR_INVALID_SHADER_NV:
+            std::cout << "failed to create shader module: invalid shader" << std::endl;
+            break;
+        default:
+            std::cout << "failed to create shader module: unknown error" << std::endl;
+        }
+        throw std::runtime_error("failed to create shader module!");
+    }
+
+    return shaderModule;
+}
+
+std::vector<char> App::readFile(const std::string &filename)
+{
+    std::ifstream file(filename, std::ios::ate | std::ios::binary); // 打开文件: 以二进制方式读取, ate:打开就移动到末尾
+    if (!file.is_open())
+    {
+        throw std::runtime_error("failed to open file!");
+    }
+
+    size_t fileSize = (size_t)file.tellg(); // 当前位置
+    file.seekg(0);                          // 移动到文件开头
+    std::vector<char> filedata(fileSize);
+    file.read(filedata.data(), fileSize); // 读取文件数据 0~fileSize
+
+    return filedata;
+}
+
+void App::createGraphicsPipeline()
+{
+    std::vector<char> vertShaderCode = readFile("Shader/vert.spv");
+    std::vector<char> fragShaderCode = readFile("Shader/frag.spv");
+    VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+    VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+    VkPipelineShaderStageCreateInfo vertexStageInfo{};
+    vertexStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertexStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertexStageInfo.module = vertShaderModule;
+    vertexStageInfo.pName = "main";
+
+    VkPipelineShaderStageCreateInfo fragmentStageInfo{};
+    fragmentStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragmentStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragmentStageInfo.module = fragShaderModule;
+    fragmentStageInfo.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = {vertexStageInfo, fragmentStageInfo};
+
+    // --------------------------------------------------------------------
+    // 固定功能状态
+    // 1. 输入汇编器(Input Assembler)
+    //      绑定描述符和属性描述符：指向输入的顶点缓冲区
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount = 0;
+    vertexInputInfo.pVertexBindingDescriptions = nullptr;
+    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+    vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+    //      IA ：怎么读取图元/拓扑模式
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; // 三角形list
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    // 2. 视口和裁剪矩形
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(m_swapChainImageExtent.width);
+    viewport.height = static_cast<float>(m_swapChainImageExtent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = m_swapChainImageExtent;
+
+    // 3. 光栅化器
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;     // 深度偏移
+    rasterizer.depthBiasConstantFactor = 0.0f; // Optional
+    rasterizer.depthBiasClamp = 0.0f;          // Optional
+    rasterizer.depthBiasSlopeFactor = 0.0f;    // Optional
+
+    // 4. 多重采样multisampling
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampling.minSampleShading = 1.0f;          // Optional
+    multisampling.pSampleMask = nullptr;            // Optional
+    multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
+    multisampling.alphaToOneEnable = VK_FALSE;      // Optional
+
+    // 5. 深度与模板测试
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+
+    // 6. 颜色混合
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT; // 输出的颜色，保留的通道
+    colorBlendAttachment.blendEnable = VK_TRUE;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    //  全局的混合状态设置，如果这里逻辑操作=false，则使用颜色混合附件的设置
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.logicOpEnable = VK_FALSE;
+    colorBlending.logicOp = VK_LOGIC_OP_COPY;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments = &colorBlendAttachment; // 使用的colorBlendAttachment
+    colorBlending.blendConstants[0] = 0.0f;
+    colorBlending.blendConstants[1] = 0.0f;
+    colorBlending.blendConstants[2] = 0.0f;
+    colorBlending.blendConstants[3] = 0.0f;
+
+    // 7. 管线布局 VkPipelineLayout ：类似cpu向gpu传递资源，如opengl中的uniform
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 0;
+    pipelineLayoutInfo.pSetLayouts = nullptr;
+    pipelineLayoutInfo.pushConstantRangeCount = 0;
+    pipelineLayoutInfo.pPushConstantRanges = nullptr;
+
+    if (vkCreatePipelineLayout(m_LogicalDevice, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create pipeline layout!");
+    }
+
+    //--------------------------------------------------------------
+    // 动态状态：一般创建好的管线不能进行修改，需要重新创建管线
+    //  -- 这里设置的动态状态：可以在运行过程中修改
+    std::vector<VkDynamicState> dynamicStates = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR};
+
+    VkPipelineDynamicStateCreateInfo dynamicStateInfo{};
+    dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicStateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+    dynamicStateInfo.pDynamicStates = dynamicStates.data();
+
+    // VkGraphicsPipelineCreateInfo pipelineInfo{};
+
+    vkDestroyShaderModule(m_LogicalDevice, fragShaderModule, nullptr);
+    vkDestroyShaderModule(m_LogicalDevice, vertShaderModule, nullptr);
 }
