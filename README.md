@@ -164,3 +164,28 @@
     > minImageTransferGranularity：最小图像传输粒度（VkExtent3D），表示传输操作的最小宽度、高度和深度（以像素为单位）
 
 > 判断物理设备是否合适： 1.获取物理设备 属性和特性； 2.获取物理设备 支持的队列族；3.返回是否合适
+
+---
+
+## 逻辑设备与队列
+
+> 总结一下：取出物理设备的 队列族 中的 n 个队列，创建 逻辑设备
+
+逻辑设备：是一种抽象，为操作物理设备提供接口。
+
+从物理设备的队列族中 取**队列**，用于逻辑设备创建。
+
+<u>创建逻辑设备：</u>
+
+1. 需要有 **队列 创建信息** ：vector<VkDeviceQueueCreateInfo>
+2. 逻辑设备的创建信息 VkDeviceCreateInfo ：各个字段
+   - 队列创建信息 的数量、vector.data()
+   - 物理设备 开启的特性
+
+- 创建 `VkResult vkCreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDevice *pDevice)`
+
+- 获取 逻辑设备的队列（应该是传入 队列 createInfo，在创建逻辑设备时同时创建的）：
+
+---
+
+##

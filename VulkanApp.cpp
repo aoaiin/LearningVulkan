@@ -51,6 +51,7 @@ void App::initVulkan()
     createInstance();
     setupDebugMessenger();
     pickupPhysicalDevice();
+    createLogicalDevice();
 }
 
 void App::createInstance()
@@ -310,6 +311,43 @@ queueFamily App::findQueueFamilies(VkPhysicalDevice device)
     return foundQueueFamily; // 返回找到的队列族
 }
 
+void App::createLogicalDevice()
+{
+    std::set<uint32_t> indices = {m_queueFamily.graphicsQueueFamily.value()};
+    // 1. 逻辑设备 使用的队列createInfo
+    float priority = 1.0f;
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+    for (uint32_t index : indices)
+    {
+        VkDeviceQueueCreateInfo queueCreateInfo{};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = index;
+        queueCreateInfo.queueCount = 1;
+        queueCreateInfo.pQueuePriorities = &priority;
+        queueCreateInfos.push_back(queueCreateInfo);
+    }
+
+    // 2. 物理设备特性
+    VkPhysicalDeviceFeatures deviceFeatures{};
+
+    // 3. 逻辑设备的创建信息
+    VkDeviceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+    createInfo.pQueueCreateInfos = queueCreateInfos.data();
+    createInfo.pEnabledFeatures = &deviceFeatures;
+    createInfo.enabledLayerCount = 0;
+    createInfo.ppEnabledExtensionNames = nullptr;
+    // 创建逻辑设备
+    if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_LogicalDevice) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create logical device!");
+    }
+
+    // 4. 获取 逻辑设备的 队列
+    vkGetDeviceQueue(m_LogicalDevice, m_queueFamily.graphicsQueueFamily.value(), 0, &m_graphicsQueue);
+}
+
 VKAPI_ATTR VkBool32 VKAPI_CALL App::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)
 {
     // VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT //根据严重性级别选择处理方式
@@ -329,6 +367,8 @@ void App::cleanupALL()
 
 void App::cleanupWindow()
 {
+    vkDestroyDevice(m_LogicalDevice, nullptr);
+
     if (enabledValidationLayers)
     {
         destroyDebugUtilsMessenger(m_instance, m_debugMessenger, nullptr);

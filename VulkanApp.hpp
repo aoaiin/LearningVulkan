@@ -1,7 +1,9 @@
 #include <iostream>
+#include <string>
 #include <cstring>
 #include <vector>
 #include <optional>
+#include <set>
 
 #define GLFW_INCLUDE_VULKAN
 #include <glfw/glfw3.h>
@@ -77,6 +79,9 @@ private:
     // 查找 物理设备 支持的 队列族
     queueFamily findQueueFamilies(VkPhysicalDevice device);
 
+    // 创建 逻辑设备
+    void createLogicalDevice();
+
 private:
     // debug回调函数
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
@@ -96,5 +101,10 @@ private:
     VkDebugUtilsMessengerEXT m_debugMessenger;
 
     VkPhysicalDevice m_physicalDevice;
+    VkDevice m_LogicalDevice;
+
+    VkQueue m_graphicsQueue;
+
+private:
     queueFamily m_queueFamily;
 };
