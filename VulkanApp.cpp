@@ -61,6 +61,9 @@ void App::initVulkan()
 
     GetSwapChainImages(m_swapChainImages);
     createImageViews();
+
+    createRenderPass();
+    createGraphicsPipeline();
 }
 
 void App::createInstance()
@@ -637,6 +640,9 @@ void App::cleanupALL()
 
 void App::cleanupVulkan()
 {
+    vkDestroyPipeline(m_LogicalDevice, m_graphicsPipeline, nullptr);
+    vkDestroyRenderPass(m_LogicalDevice, m_renderPass, nullptr);
+    vkDestroyPipelineLayout(m_LogicalDevice, m_pipelineLayout, nullptr);
     for (const auto &imageView : m_swapChainImageViews)
     {
         vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
@@ -697,6 +703,50 @@ VkShaderModule App::createShaderModule(const std::vector<char> &code)
     return shaderModule;
 }
 
+void App::createRenderPass()
+{
+    // 1. 颜色附件的描述
+    VkAttachmentDescription colorAttachment{};
+    colorAttachment.flags = 0;
+    colorAttachment.format = m_swapChainImageFormat;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;   // 渲染前：clear
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // 渲染后：store
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;     // 渲染前：这个附件 未定义
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // 渲染后：这个附件是用于 呈现的
+
+    // 1.1 附件引用
+    VkAttachmentReference colorAttachmentRef{};
+    colorAttachmentRef.attachment = 0;
+    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    // 2. 子通道描述
+    VkSubpassDescription subpass{};
+    subpass.flags = 0;
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorAttachmentRef;
+    // 2.1 依赖关系描述
+    VkSubpassDependency subpassdependency{};
+
+    // 3. 创建渲染通道
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    // renderPassInfo.dependencyCount = 1;
+    // renderPassInfo.pDependencies = &subpassdependency;
+
+    if (vkCreateRenderPass(m_LogicalDevice, &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create render pass!");
+    }
+}
+
 std::vector<char> App::readFile(const std::string &filename)
 {
     std::ifstream file(filename, std::ios::ate | std::ios::binary); // 打开文件: 以二进制方式读取, ate:打开就移动到末尾
@@ -715,8 +765,8 @@ std::vector<char> App::readFile(const std::string &filename)
 
 void App::createGraphicsPipeline()
 {
-    std::vector<char> vertShaderCode = readFile("Shader/vert.spv");
-    std::vector<char> fragShaderCode = readFile("Shader/frag.spv");
+    std::vector<char> vertShaderCode = readFile("D:\\code\\LearnVulkan\\Learning\\Shader\\vert.spv");
+    std::vector<char> fragShaderCode = readFile("D:\\code\\LearnVulkan\\Learning\\Shader\\frag.spv");
     VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
     VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
 
@@ -732,7 +782,7 @@ void App::createGraphicsPipeline()
     fragmentStageInfo.module = fragShaderModule;
     fragmentStageInfo.pName = "main";
 
-    VkPipelineShaderStageCreateInfo shaderStages[] = {vertexStageInfo, fragmentStageInfo};
+    VkPipelineShaderStageCreateInfo shaderStageCreateInfos[] = {vertexStageInfo, fragmentStageInfo};
 
     // --------------------------------------------------------------------
     // 固定功能状态
@@ -762,6 +812,13 @@ void App::createGraphicsPipeline()
     VkRect2D scissor{};
     scissor.offset = {0, 0};
     scissor.extent = m_swapChainImageExtent;
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
 
     // 3. 光栅化器
     VkPipelineRasterizationStateCreateInfo rasterizer{};
@@ -812,7 +869,8 @@ void App::createGraphicsPipeline()
     colorBlending.blendConstants[2] = 0.0f;
     colorBlending.blendConstants[3] = 0.0f;
 
-    // 7. 管线布局 VkPipelineLayout ：类似cpu向gpu传递资源，如opengl中的uniform
+    // -----------------------------------------------------------------------------
+    // 7. 创建 管线布局 VkPipelineLayout ：类似cpu向gpu传递资源，如opengl中的uniform
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 0;
@@ -837,7 +895,30 @@ void App::createGraphicsPipeline()
     dynamicStateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
     dynamicStateInfo.pDynamicStates = dynamicStates.data();
 
-    // VkGraphicsPipelineCreateInfo pipelineInfo{};
+    //-----------------------------------------------------------------
+    // 创建图形管线
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStageCreateInfos;
+
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.pDynamicState = &dynamicStateInfo;
+    pipelineInfo.layout = m_pipelineLayout;
+    pipelineInfo.renderPass = m_renderPass;
+    pipelineInfo.subpass = 0;
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+
+    if (vkCreateGraphicsPipelines(m_LogicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create graphics pipeline!");
+    }
 
     vkDestroyShaderModule(m_LogicalDevice, fragShaderModule, nullptr);
     vkDestroyShaderModule(m_LogicalDevice, vertShaderModule, nullptr);

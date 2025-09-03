@@ -339,3 +339,23 @@ VkSurfaceKHR
 动态状态：一般创建好的管线不能进行修改，需要重新创建管线.
 设置的动态状态 ：可以在运行过程中修改
 `VkPipelineDynamicStateCreateInfo`
+
+### RenderPass 渲染通道
+
+渲染通道：描述渲染过程中 附件 如何被使用；
+定义了附件的生命周期（加载，存储，布局转换），子通道（subpass）划分，子通道之间的依赖；
+
+1. 渲染过程会用到哪些附件（颜色、深度、模板等）
+2. 每个附件在渲染前，渲染中，渲染后的内存布局
+3. 渲染前如何处理附件的初始内容（加载—），渲染后如何保存（存储）
+4. 渲染过程被划分为哪些 子步骤（子通道），每个子通道如何使用附件
+5. 子通道之间 与 外部操作的执行顺序，确保内存可见性
+
+> 完成 createGraphicsPipeline 和 createRenderPass
+> 注意在 InitApp 的时候，先创建 RenderPass，然后再创建图形管线
+> 注意 销毁时候的顺序
+
+1. 创建图形管线： 里面有创建 **管线布局 layout（类似 cpu 向 gpu 传递资源，如 opengl 中的 uniform）**
+2. 创建 RenderPass： 颜色附件描述、subpass 描述，然后创建
+
+### Pipeline Cache 保存管线配置

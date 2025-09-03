@@ -112,9 +112,11 @@ private:
     void GetSwapChainImages(std::vector<VkImage> &images);
     void createImageViews();
 
-    // 创建图形管线
+    // 创建 管线布局layout、图形管线
     void createGraphicsPipeline();
     VkShaderModule createShaderModule(const std::vector<char> &code);
+
+    void createRenderPass();
 
 private:
     static std::vector<char> readFile(const std::string &filename);
@@ -153,6 +155,8 @@ private:
     std::vector<VkImageView> m_swapChainImageViews;
 
     VkPipelineLayout m_pipelineLayout;
+    VkRenderPass m_renderPass;
+    VkPipeline m_graphicsPipeline;
 
 private:
     queueFamily m_queueFamily;
