@@ -109,6 +109,9 @@ private:
     VkPresentModeKHR choosePresentMode(const SwapChainDetails &details);
     VkExtent2D chooseSwapExtent(const SwapChainDetails &details);
 
+    void GetSwapChainImages(std::vector<VkImage> &images);
+    void createImageViews();
+
 private:
     // debug回调函数
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
@@ -135,6 +138,12 @@ private:
 
     VkQueue m_graphicsQueue;
     VkQueue m_presentQueue;
+
+    VkFormat m_swapChainImageFormat; // 交换链图像格式
+    VkExtent2D m_swapChainExtent;    // 交换链图像分辨率
+    // 图像
+    std::vector<VkImage> m_swapChainImages; // 交换链中的 VkImage 句柄数组
+    std::vector<VkImageView> m_swapChainImageViews;
 
 private:
     queueFamily m_queueFamily;

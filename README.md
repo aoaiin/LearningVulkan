@@ -235,7 +235,7 @@ VkSurfaceKHR
 
 ---
 
-## 交换链
+## 交换链 ： 图像队列
 
 也是一个扩展
 
@@ -277,3 +277,21 @@ VkSurfaceKHR
   - 选择参数
   - 设置 swapchain 的 createInfo ：很多字段
   - 创建
+
+---
+
+## 图像视图 View : 解析图像
+
+> 图像 VkImage 是像素数据的容器，但本身不包含“如何被访问”的信息
+> 图像视图 VkImageView ：定义访问规则，解释像素格式：
+>
+> 1. 指定图像类型：图像被解释为 2D/3D 纹理，立方体贴图等等（通过 Viewtype 控制）
+> 2. 限定访问范围：允许访问的 mipmap 级别，数组图层，颜色通道（subresourceRange）
+> 3. 格式转换：通过颜色通道 重映射（如 R 通道映射为灰度）
+
+1. 从 Swapchain 中获取 Image 句柄列表： vkGetSwapchainImagesKHR ：
+   - 第一次调用时传入 nullptr 获取数量，第二次分配数组获取图像。
+2. 创建 ImageView ：每个 Image 对应有 ImageView
+   - VkImageViewCreateInfo 、vkCreateImageView
+
+---

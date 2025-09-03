@@ -57,6 +57,9 @@ void App::initVulkan()
     pickupPhysicalDevice();
     createLogicalDevice();
     createSwapChain();
+
+    GetSwapChainImages(m_swapChainImages);
+    createImageViews();
 }
 
 void App::createInstance()
@@ -447,7 +450,7 @@ void App::createSwapChain()
     createInfo.imageFormat = surfaceFormat.format;
     createInfo.imageColorSpace = surfaceFormat.colorSpace;
     createInfo.imageExtent = swapExtent;
-    createInfo.imageArrayLayers = 1; //
+    createInfo.imageArrayLayers = 1; // 图像数组
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
     // 根据支持的队列，设置队列族数量、索引
@@ -479,6 +482,9 @@ void App::createSwapChain()
     {
         throw std::runtime_error("failed to create swap chain!");
     }
+
+    m_swapChainImageFormat = surfaceFormat.format;
+    m_swapChainExtent = swapExtent;
 }
 
 SwapChainDetails App::querySwapChainSupport(VkPhysicalDevice device)
@@ -569,6 +575,47 @@ VkExtent2D App::chooseSwapExtent(const SwapChainDetails &details)
     }
 }
 
+void App::GetSwapChainImages(std::vector<VkImage> &images)
+{
+    uint32_t imageCount = 0;
+    vkGetSwapchainImagesKHR(m_LogicalDevice, m_swapChain, &imageCount, nullptr);
+    if (imageCount != 0)
+    {
+        images.resize(imageCount);
+        vkGetSwapchainImagesKHR(m_LogicalDevice, m_swapChain, &imageCount, images.data());
+        // 这里是引用，调用的时候传入就行
+        // m_swapChainImages = images; // 保存一份
+    }
+}
+
+void App::createImageViews()
+{
+    m_swapChainImageViews.resize(m_swapChainImages.size());
+
+    for (int i = 0; i < m_swapChainImageViews.size(); i++)
+    {
+        VkImageViewCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        createInfo.image = m_swapChainImages[i];     // 描述的图像
+        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D; // 图像解析的类型
+        createInfo.format = m_swapChainImageFormat;
+        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        createInfo.subresourceRange.baseMipLevel = 0;
+        createInfo.subresourceRange.levelCount = 1;
+        createInfo.subresourceRange.baseArrayLayer = 0;
+        createInfo.subresourceRange.layerCount = 1;
+
+        if (vkCreateImageView(m_LogicalDevice, &createInfo, nullptr, &m_swapChainImageViews[i]) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create image views!");
+        }
+    }
+}
+
 VKAPI_ATTR VkBool32 VKAPI_CALL App::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)
 {
     // VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT //根据严重性级别选择处理方式
@@ -589,6 +636,11 @@ void App::cleanupALL()
 
 void App::cleanupVulkan()
 {
+    for (const auto &imageView : m_swapChainImageViews)
+    {
+        vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
+    }
+
     vkDestroySwapchainKHR(m_LogicalDevice, m_swapChain, nullptr);
 
     vkDestroyDevice(m_LogicalDevice, nullptr);
