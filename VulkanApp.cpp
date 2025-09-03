@@ -269,7 +269,7 @@ void App::pickupPhysicalDevice()
 
 bool App::isDeviceSuitable(VkPhysicalDevice device)
 {
-    // 获取设备属性和特性
+    // 1.获取设备属性和特性
     VkPhysicalDeviceProperties deviceProperties;
     vkGetPhysicalDeviceProperties(device, &deviceProperties);
     VkPhysicalDeviceFeatures deviceFeatures;
@@ -278,10 +278,36 @@ bool App::isDeviceSuitable(VkPhysicalDevice device)
     // 打印设备名称
     std::cout << "Device Name: " << deviceProperties.deviceName << std::endl;
 
+    // 2.查找/获取 物理设备 支持的 队列族
+    m_queueFamily = findQueueFamilies(device);
+    // std::cout << "Graphics Queue Family Index: " << m_queueFamily.graphicsQueueFamily.value() << std::endl;
+
     // 设备是  离散/独立 显卡(设备类型)
     // 设备支持 几何着色器(设备特性)
     return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) &&
-           deviceFeatures.geometryShader;
+           deviceFeatures.geometryShader &&
+           m_queueFamily.isComplete();
+}
+
+queueFamily App::findQueueFamilies(VkPhysicalDevice device)
+{
+    // 获取 队列族数量，队列族属性
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+    int index = 0;
+    queueFamily foundQueueFamily;
+    for (const auto &queueFamily : queueFamilies)
+    {
+        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        {
+            foundQueueFamily.graphicsQueueFamily = index; // 记录 图形队列族 索引
+        }
+        index++;
+    }
+    return foundQueueFamily; // 返回找到的队列族
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL App::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)

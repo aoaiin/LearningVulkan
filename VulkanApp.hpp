@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstring>
 #include <vector>
+#include <optional>
 
 #define GLFW_INCLUDE_VULKAN
 #include <glfw/glfw3.h>
@@ -32,6 +33,16 @@ struct windowInfo
     std::string title;
 };
 
+struct queueFamily
+{
+    std::optional<uint32_t> graphicsQueueFamily; // 图形队列族 索引(可能存在,可能不存在)
+
+    bool isComplete()
+    {
+        return graphicsQueueFamily.has_value();
+    }
+};
+
 class App
 {
 public:
@@ -57,11 +68,14 @@ private:
     // 销毁 debugUtils ： 去找销毁debugUtils的函数指针，调用
     void destroyDebugUtilsMessenger(VkInstance instance, VkDebugUtilsMessengerEXT messenger, VkAllocationCallbacks *pAllocator);
 
-    // -------------- 物理硬件 --------------
+    // -------------- 物理设备 --------------
     // 选取合适的设备
     void pickupPhysicalDevice();
-    // 判断 物理设备是否合适
+    // 判断 物理设备是否合适 ，查找/获取 物理设备的队列族
     bool isDeviceSuitable(VkPhysicalDevice device);
+    //
+    // 查找 物理设备 支持的 队列族
+    queueFamily findQueueFamilies(VkPhysicalDevice device);
 
 private:
     // debug回调函数
@@ -82,4 +96,5 @@ private:
     VkDebugUtilsMessengerEXT m_debugMessenger;
 
     VkPhysicalDevice m_physicalDevice;
+    queueFamily m_queueFamily;
 };

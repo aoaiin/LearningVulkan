@@ -140,3 +140,27 @@
 >    设备支持的特性:如 几何着色器
 
 </details>
+
+---
+
+## 队列族
+
+每个队列族 实现对应的功能：如 图形队列族 中存放的都是渲染相关的内容；
+还有 传输队列族、计算队列族
+
+需要 <u>通过 物理设备 获取它支持哪些队列族</u>
+
+结构体 queueFamily： 1.队列族索引 如图形队列族 graphicsQueueFamily（可能存在/不存在- std::< optional >） ；2.函数 isComplete 保存的队列族索引是否有值
+
+在选取设备的时候，判断设备适合：**查找物理设备支持的队列族** 函数：
+
+- vkGetPhysicalDeviceQueueFamilyProperties 获取队列族 数量、属性
+- 遍历获取到的队列族属性，是否有符合的，如图形队列族
+  - if(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+    > 可以查看一下属性里面有什么：
+    > queueFlags 标志位：支持的操作类型；
+    > queueCount：队列族中可用的队列数量
+    > timestampValidBits：时间戳有效位的数量，用于性能查询和时间戳操作。
+    > minImageTransferGranularity：最小图像传输粒度（VkExtent3D），表示传输操作的最小宽度、高度和深度（以像素为单位）
+
+> 判断物理设备是否合适： 1.获取物理设备 属性和特性； 2.获取物理设备 支持的队列族；3.返回是否合适
