@@ -25,8 +25,11 @@ const bool enabledValidationLayers = true;
 #endif
 
 // 使用的验证层
-const std::vector<const char *> validationLayers = {
+const std::vector<const char *> g_validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
+
+const std::vector<const char *> g_deviceExtensions = {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 struct windowInfo
 {
@@ -45,6 +48,13 @@ struct queueFamily
     {
         return graphicsQueueFamily.has_value() && presentQueueFamily.has_value();
     }
+};
+
+struct SwapChainDetails
+{
+    VkSurfaceCapabilitiesKHR surfaceCapabilities;   // 表面/窗口 能力
+    std::vector<VkSurfaceFormatKHR> surfaceFormats; // 支持的格式
+    std::vector<VkPresentModeKHR> presentModes;     // 支持的呈现模式
 };
 
 class App
@@ -77,6 +87,8 @@ private:
     void pickupPhysicalDevice();
     // 判断 物理设备是否合适 ，查找/获取 物理设备的队列族
     bool isDeviceSuitable(VkPhysicalDevice device);
+    // 检查物理设备 是否支持扩展
+    bool checkDeviceExtensionSupported(VkPhysicalDevice device);
     //
     // 查找 物理设备 支持的 队列族 : 图形graphics、呈现present
     queueFamily findQueueFamilies(VkPhysicalDevice device);
@@ -84,8 +96,18 @@ private:
     // 创建 逻辑设备
     void createLogicalDevice();
 
-    //
     void createSurface();
+
+    void createSwapChain();
+    // 查询交换链支持情况（获取相关信息）
+    SwapChainDetails querySwapChainSupport(VkPhysicalDevice device);
+    VkSurfaceCapabilitiesKHR GetSurfaceCap(VkPhysicalDevice device);
+    std::vector<VkSurfaceFormatKHR> GetSurfaceFmt(VkPhysicalDevice device);
+    std::vector<VkPresentModeKHR> GetSurfacePresentModes(VkPhysicalDevice device);
+    // 选择交换链参数
+    VkSurfaceFormatKHR chooseSurfaceFormat(const SwapChainDetails &details);
+    VkPresentModeKHR choosePresentMode(const SwapChainDetails &details);
+    VkExtent2D chooseSwapExtent(const SwapChainDetails &details);
 
 private:
     // debug回调函数
@@ -109,6 +131,7 @@ private:
     VkPhysicalDevice m_physicalDevice;
     VkDevice m_LogicalDevice;
     VkSurfaceKHR m_surface;
+    VkSwapchainKHR m_swapChain;
 
     VkQueue m_graphicsQueue;
     VkQueue m_presentQueue;

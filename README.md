@@ -232,3 +232,48 @@ VkSurfaceKHR
 > 检查是否支持 present 的时候(vkGetPhysicalDeviceSurfaceSupportKHR)，需要传入 surface，因此注意创建的顺序
 >
 > 创建 vk 实例、创建 debugUtils、创建 Surface、选取物理设备、创建逻辑设备
+
+---
+
+## 交换链
+
+也是一个扩展
+
+> 本质：一组符合特定条件的图像队列（排好的图像）
+>
+> 双缓冲机制：gpu 将内容渲染在后端缓冲，然后显示器显示前端缓冲，显示完后，交换两个缓冲区
+
+> 特定条件：
+>
+> 1. 图像所有权 在 显示 和 渲染之间转移
+> 2. 格式匹配：图像格式和窗口表面 Surface 匹配
+> 3. 尺寸匹配：图像尺寸和窗口,显示器分辨率匹配
+
+> 流程： 查询支持细节->选择参数->创建交换链->获取图像
+
+记录需要的扩展
+`const std::vector<const char *> g_deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};`
+
+函数：
+
+- 检查物理设备是否 支持扩展:`checkDeviceExtensionSupported`
+- 查询交换链支持情况（获取相关信息）
+  ```cpp
+  SwapChainDetails querySwapChainSupport(VkPhysicalDevice device);
+  VkSurfaceCapabilitiesKHR GetSurfaceCap(VkPhysicalDevice device);
+  std::vector<VkSurfaceFormatKHR> GetSurfaceFmt(VkPhysicalDevice device);
+  std::vector<VkPresentModeKHR> GetSurfacePresentModes(VkPhysicalDevice device);
+  ```
+- 选择参数
+
+  ```cpp
+  VkSurfaceFormatKHR chooseSurfaceFormat(const SwapChainDetails &details);
+  VkPresentModeKHR choosePresentMode(const SwapChainDetails &details);
+  VkExtent2D chooseSwapExtent(const SwapChainDetails &details);
+  ```
+
+- 交换链：VkSwapchainKHR
+  - 先查询交换链支持情况，获取 swapchain 的信息
+  - 选择参数
+  - 设置 swapchain 的 createInfo ：很多字段
+  - 创建
