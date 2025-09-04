@@ -420,6 +420,20 @@ AccessMask：用于 stagemask 指定的阶段 执行的 资源操作 （如 dstS
 
 > vkCmd 开始的函数 表示记录的命令
 
-绘制命令：整个从 begin/end commandbuffer ，绘制一帧
+---
 
-- `void DrawFrame();`
+## 渲染三角形
+
+需要用到 fence 和 semaphore：
+fence：等待上一帧完成
+semaphore：读取 交换链图像 ；写入/渲染 图像完成 ；
+
+- 详细看 `void DrawFrame();`
+
+然后是 相关的渲染帧优化：
+定义了 maxframe：
+commandbuffer、fence、信号量等等，都根据 最大处理的帧数量 创建多个。
+
+> 注意：之前在创建 交换链的时候，它的 minImagecount 改成了物理设备 spec 提供的+1（双缓冲 交换链的图像，就变成了 3）
+> 这样在对图像的信号量索引的时候，会报错；
+> 改了好久才发现，现在把它改回去

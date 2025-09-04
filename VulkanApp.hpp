@@ -26,6 +26,9 @@ const bool enabledValidationLayers = false;
 const bool enabledValidationLayers = true;
 #endif
 
+// Note: 之前创建交换链的时候，最小图像数量进行了+1,如果+1了，那图像的信号量 数量就不能=MAX_FRAMES
+const uint32_t MAX_FRAMES = 2; // 最大同时处理的帧数
+
 // 使用的验证层
 const std::vector<const char *> g_validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -131,6 +134,9 @@ private:
     void DrawFrame();
 
 private:
+    void createSyncObjects();
+
+private:
     static std::vector<char> readFile(const std::string &filepath);
     static void writeFile(const std::string &filepath, const std::vector<char> &data, size_t dataSize);
 
@@ -166,7 +172,12 @@ private:
     VkPipeline m_graphicsPipeline;
 
     VkCommandPool m_commandPool;
-    VkCommandBuffer m_commandBuffer;
+    std::vector<VkCommandBuffer> m_commandBuffers;
+
+private:
+    std::vector<VkSemaphore> m_imageAvailableSemaphores; // 图像可用信号
+    std::vector<VkSemaphore> m_renderFinishedSemaphores; // 渲染完成信号
+    std::vector<VkFence> m_inFlightFences;               // 同步栅栏
 
 private:
     VkFormat m_swapChainImageFormat;   // 交换链图像格式
