@@ -393,3 +393,33 @@ createFrameBuffer 函数：
 VkSubpassDependency 中有两个 srcSubpass 和 dstSubpass 两个子阶段：
 StageMask：需要等待哪个阶段
 AccessMask：用于 stagemask 指定的阶段 执行的 资源操作 （如 dstStageMask 阶段划分的的 dstAccessmask 的资源操作需要 srcStagemask 的 SrcAccessmask 操作完成）
+
+---
+
+## 命令池和命令缓冲区
+
+命令：需要记录到命令缓冲区中，然后提交给 GPU 队列执行
+命令缓冲区不能单独创建，需要从命令池中分配。
+命令池：负责 分配/回收 命令缓冲区的底层内存
+
+1. cpu 批量准备指令，减少 cpu 和 gpu 交互次数
+2. 支持多线程 记录命令
+3. gpu 高效执行
+
+先 createCommandPool，再 createCommandBuffer；
+
+对 begin/end commandbuffer 的封装：
+
+- `void BeginCommandBuffer(VkCommandBuffer &commandBuffer, VkCommandBufferUsageFlags flags = 0);`
+- `void EndCommandBuffer(VkCommandBuffer &commandBuffer);`
+
+记录命令：
+用 begin/end commandbuffer 包裹，里面 begin/end renderpass，中间 vkcmd 设置管线、viewport ，调用 vkCmdDraw 等等
+
+- `void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);`
+
+> vkCmd 开始的函数 表示记录的命令
+
+绘制命令：整个从 begin/end commandbuffer ，绘制一帧
+
+- `void DrawFrame();`

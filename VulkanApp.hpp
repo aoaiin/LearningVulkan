@@ -123,6 +123,13 @@ private:
     // 创建framebuffer
     void createFramebuffers();
 
+    void createCommandPool();
+    void createCommandBuffer();
+    void BeginCommandBuffer(VkCommandBuffer &commandBuffer, VkCommandBufferUsageFlags flags = 0);
+    void EndCommandBuffer(VkCommandBuffer &commandBuffer);
+    void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void DrawFrame();
+
 private:
     static std::vector<char> readFile(const std::string &filepath);
     static void writeFile(const std::string &filepath, const std::vector<char> &data, size_t dataSize);
@@ -154,17 +161,19 @@ private:
     VkQueue m_graphicsQueue;
     VkQueue m_presentQueue;
 
+    VkPipelineLayout m_pipelineLayout;
+    VkRenderPass m_renderPass;
+    VkPipeline m_graphicsPipeline;
+
+    VkCommandPool m_commandPool;
+    VkCommandBuffer m_commandBuffer;
+
+private:
     VkFormat m_swapChainImageFormat;   // 交换链图像格式
     VkExtent2D m_swapChainImageExtent; // 交换链图像分辨率
     // 图像
     std::vector<VkImage> m_swapChainImages; // 交换链中的 VkImage 句柄数组
     std::vector<VkImageView> m_swapChainImageViews;
-
-    VkPipelineLayout m_pipelineLayout;
-    VkRenderPass m_renderPass;
-    VkPipeline m_graphicsPipeline;
-
-private:
     std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
 private:
