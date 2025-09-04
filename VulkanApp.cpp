@@ -64,6 +64,8 @@ void App::initVulkan()
 
     createRenderPass();
     createGraphicsPipeline();
+
+    createFramebuffers();
 }
 
 void App::createInstance()
@@ -640,6 +642,10 @@ void App::cleanupALL()
 
 void App::cleanupVulkan()
 {
+    for (int i = 0; i < m_swapChainFramebuffers.size(); i++)
+    {
+        vkDestroyFramebuffer(m_LogicalDevice, m_swapChainFramebuffers[i], nullptr);
+    }
     vkDestroyPipeline(m_LogicalDevice, m_graphicsPipeline, nullptr);
     vkDestroyRenderPass(m_LogicalDevice, m_renderPass, nullptr);
     vkDestroyPipelineLayout(m_LogicalDevice, m_pipelineLayout, nullptr);
@@ -744,6 +750,33 @@ void App::createRenderPass()
     if (vkCreateRenderPass(m_LogicalDevice, &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to create render pass!");
+    }
+}
+
+void App::createFramebuffers()
+{
+    m_swapChainFramebuffers.resize(m_swapChainImageViews.size());
+
+    for (int index = 0; index < m_swapChainImageViews.size(); index++)
+    {
+        // 1. 取出对应的 imageView
+        VkImageView attachments[] = {
+            m_swapChainImageViews[index]};
+
+        // 2. 对应 一个framebuffer
+        VkFramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = attachments;
+        framebufferInfo.width = m_swapChainImageExtent.width;
+        framebufferInfo.height = m_swapChainImageExtent.height;
+        framebufferInfo.layers = 1;
+        framebufferInfo.renderPass = m_renderPass;
+
+        if (vkCreateFramebuffer(m_LogicalDevice, &framebufferInfo, nullptr, &m_swapChainFramebuffers[index]) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create framebuffer!");
+        }
     }
 }
 

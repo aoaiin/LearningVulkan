@@ -120,6 +120,9 @@ private:
 
     void createRenderPass();
 
+    // 创建framebuffer
+    void createFramebuffers();
+
 private:
     static std::vector<char> readFile(const std::string &filepath);
     static void writeFile(const std::string &filepath, const std::vector<char> &data, size_t dataSize);
@@ -160,6 +163,9 @@ private:
     VkPipelineLayout m_pipelineLayout;
     VkRenderPass m_renderPass;
     VkPipeline m_graphicsPipeline;
+
+private:
+    std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
 private:
     queueFamily m_queueFamily;

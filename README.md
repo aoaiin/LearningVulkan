@@ -366,3 +366,18 @@ vkCreateGraphicsPipelines 的第二个参数是 pipelinecache；
 如果生成失败，则继续用原来的 VK_NULL_HANDLE，创建图形管线
 
 > 并且添加 pipelinecache 的路径，readfile/writefile 函数
+
+---
+
+## 帧缓冲区
+
+创建 framebuffer：数量和 image/imageviews 一致：
+`std::vector<VkFramebuffer> m_swapChainFramebuffers;`
+
+createFrameBuffer 函数：
+
+1. 根据 image/imageviews 数量调整大小
+2. 遍历 imageViews 作为 attachment，
+   设置 framebufferCreateInfo 各字段，设置宽高，RenderPass ；
+   创建。
+3. 注意在 Init 中调用的位置
