@@ -381,3 +381,15 @@ createFrameBuffer 函数：
    设置 framebufferCreateInfo 各字段，设置宽高，RenderPass ；
    创建。
 3. 注意在 Init 中调用的位置
+
+---
+
+## subpassDependency 渲染子通道依赖
+
+> 这个依赖主要用于 subpass 的同步 ：子 pass 的执行顺序
+
+在创建 renderpass 时设置
+
+VkSubpassDependency 中有两个 srcSubpass 和 dstSubpass 两个子阶段：
+StageMask：需要等待哪个阶段
+AccessMask：用于 stagemask 指定的阶段 执行的 资源操作 （如 dstStageMask 阶段划分的的 dstAccessmask 的资源操作需要 srcStagemask 的 SrcAccessmask 操作完成）

@@ -736,6 +736,17 @@ void App::createRenderPass()
     subpass.pColorAttachments = &colorAttachmentRef;
     // 2.1 依赖关系描述
     VkSubpassDependency subpassdependency{};
+    subpassdependency.srcSubpass = VK_SUBPASS_EXTERNAL; // 外部子通道
+    subpassdependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    subpassdependency.srcAccessMask = 0;
+    subpassdependency.dstSubpass = 0;
+    subpassdependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    subpassdependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    // subpassdependency.dependencyFlags = 0;
+    // 这里的依赖关系是说：等待交换链图像的颜色附件输出阶段完成，才能进行子通道0的颜色附件写入操作
+    // 控制两个subpass的执行顺序 ：src 和 dst 两个subpass
+    // stageMask: 需要等待哪个阶段
+    // accessMask: 哪些资源操作需要被同步
 
     // 3. 创建渲染通道
     VkRenderPassCreateInfo renderPassInfo{};
