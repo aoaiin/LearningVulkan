@@ -78,6 +78,8 @@ void App::initVulkan()
     createCommandPool(); // 这里因为 创建 vertexBuffer 中有用到临时的复制命令缓冲区
 
     createTextureImage();
+    createTextureImageView();
+    createTextureSampler();
 
     createVertexBuffer();
     createIndexBuffer();
@@ -334,6 +336,7 @@ bool App::isDeviceSuitable(VkPhysicalDevice device)
     // 设备支持 几何着色器(设备特性)
     return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) &&
            deviceFeatures.geometryShader &&
+           deviceFeatures.samplerAnisotropy && // 纹理采样各向异性过滤
            m_queueFamily.isComplete() &&
            deviceExtensionSupported &&
            swapChainAdequate;
@@ -409,7 +412,15 @@ void App::createLogicalDevice()
     }
 
     // 2. 物理设备特性
+    // 查询设备特性
+    VkPhysicalDeviceFeatures supportedFeatures;
+    vkGetPhysicalDeviceFeatures(m_physicalDevice, &supportedFeatures);
+
     VkPhysicalDeviceFeatures deviceFeatures{};
+    if (supportedFeatures.samplerAnisotropy)
+    {
+        deviceFeatures.samplerAnisotropy = VK_TRUE;
+    }
 
     // 3. 逻辑设备的创建信息
     VkDeviceCreateInfo createInfo{};
@@ -709,7 +720,9 @@ void App::cleanupALL()
 
 void App::cleanupVulkan()
 {
-    // 添加纹理图像清理
+    // 清理纹理相关资源
+    vkDestroySampler(m_LogicalDevice, m_textureSampler, nullptr);
+    vkDestroyImageView(m_LogicalDevice, m_textureImageView, nullptr);
     vkDestroyImage(m_LogicalDevice, m_textureImage, nullptr);
     vkFreeMemory(m_LogicalDevice, m_textureImageMemory, nullptr);
 
@@ -1148,7 +1161,7 @@ void App::DrawFrame()
 
 void App::createDescriptorSetLayout()
 {
-    // 1. layout binding
+    // 1.1 UB layout binding
     VkDescriptorSetLayoutBinding uboLayoutBinding{};
     uboLayoutBinding.binding = 0;
     uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1156,11 +1169,21 @@ void App::createDescriptorSetLayout()
     uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
 
+    // 1.2 纹理采样器
+    VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+    samplerLayoutBinding.binding = 1;
+    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerLayoutBinding.descriptorCount = 1;
+    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    samplerLayoutBinding.pImmutableSamplers = nullptr; // Optional
+
+    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerLayoutBinding};
+
     // 2. layout create info
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &uboLayoutBinding;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
 
     if (vkCreateDescriptorSetLayout(m_LogicalDevice, &layoutInfo, nullptr, &m_descriptorSetLayout) != VK_SUCCESS)
     {
@@ -1171,15 +1194,17 @@ void App::createDescriptorSetLayout()
 void App::createDescriptorPool()
 {
     // 1. 描述符池大小
-    VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES);
+    std::array<VkDescriptorPoolSize, 2> poolSizes{};
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES);
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES);
 
     // 2. 创建描述符池
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
     poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES);
     poolInfo.flags = 0; // Optional
 
@@ -1217,18 +1242,30 @@ void App::createDescriptorSets()
         bufferInfo.range = sizeof(UniformBufferObject);
 
         // 3.2 描述符写入结构体
-        VkWriteDescriptorSet descriptorWrite{};
-        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = m_descriptorSets[i];
-        descriptorWrite.dstBinding = 0;
-        descriptorWrite.dstArrayElement = 0;
-        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrite.descriptorCount = 1;
-        descriptorWrite.pBufferInfo = &bufferInfo;
-        descriptorWrite.pImageInfo = nullptr;       // Optional
-        descriptorWrite.pTexelBufferView = nullptr; // Optional
+        std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[0].dstSet = m_descriptorSets[i];
+        descriptorWrites[0].dstBinding = 0; // ub 绑定点=0
+        descriptorWrites[0].dstArrayElement = 0;
+        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrites[0].descriptorCount = 1;
+        descriptorWrites[0].pBufferInfo = &bufferInfo;
 
-        vkUpdateDescriptorSets(m_LogicalDevice, 1, &descriptorWrite, 0, nullptr);
+        // 3.3 纹理采样器
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.sampler = m_textureSampler;
+        imageInfo.imageView = m_textureImageView;
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[1].dstSet = m_descriptorSets[i];
+        descriptorWrites[1].dstBinding = 1; // 绑定点为1
+        // descriptorWrites[1].dstArrayElement = 0;
+        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[1].descriptorCount = 1;
+        descriptorWrites[1].pImageInfo = &imageInfo;
+
+        vkUpdateDescriptorSets(m_LogicalDevice, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
     }
 }
 
@@ -1419,6 +1456,89 @@ void App::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint
     vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
     EndCommandBuffer(commandBuffer, true);
+}
+
+void App::createTextureImageView()
+{
+    m_textureImageView = createImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB);
+}
+
+VkImageView App::createImageView(VkImage image, VkFormat format)
+{
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = image;
+    viewInfo.format = format;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.layerCount = 1;
+    viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+    VkImageView imageView;
+    if (vkCreateImageView(m_LogicalDevice, &viewInfo, nullptr, &imageView) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create texture image view!");
+    }
+    return imageView;
+}
+
+void App::createImageView()
+{
+    // 用于创建交换链图像的视图
+
+    GetSwapChainImages(m_swapChainImages);
+
+    m_swapChainImageViews.resize(m_swapChainImages.size());
+    for (int index = 0; index < m_swapChainImages.size(); index++)
+    {
+        m_swapChainImageViews[index] = createImageView(m_swapChainImages[index], m_swapChainImageFormat);
+    }
+}
+
+void App::createTextureSampler()
+{
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    // 1. 过滤方式
+    samplerInfo.magFilter = VK_FILTER_LINEAR; // 放大过滤(纹素少,片段多)
+    samplerInfo.minFilter = VK_FILTER_LINEAR; // 缩小过滤
+
+    // 2. 寻址模式
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // U轴：重复
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT; // V轴：重复
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT; // W轴：重复
+
+    // 3. 各项异性过滤
+    samplerInfo.anisotropyEnable = VK_TRUE;
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
+    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+
+    // 4. 边框颜色
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    // 5. 坐标归一化
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+    // 6. 比较操作(阴影贴图相关)
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+
+    // 7. MIP 相关
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR; // 层级间 过滤方式
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 0.0f;
+
+    if (vkCreateSampler(m_LogicalDevice, &samplerInfo, nullptr, &m_textureSampler) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create texture sampler!");
+    }
 }
 
 void App::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory)

@@ -71,6 +71,8 @@ struct Vertex
 {
     glm::vec2 pos;
     glm::vec3 color;
+    glm::vec2 texCoord;
+
     // 这里类似将VA分离了：顶点、顶点属性 的描述
     // 整个Vertex结构的描述
     static VkVertexInputBindingDescription getBindingDescription()
@@ -83,9 +85,9 @@ struct Vertex
         return bindingDescription;
     }
     // 各个属性的描述
-    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+    static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions()
     {
-        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
 
         // 位置属性
         attributeDescriptions[0].binding = 0;                      // 绑定索引
@@ -99,6 +101,12 @@ struct Vertex
         attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; // 格式：vec3
         attributeDescriptions[1].offset = offsetof(Vertex, color);    // 偏移量
 
+        // 纹理坐标属性
+        attributeDescriptions[2].binding = 0;                         // 绑定索引
+        attributeDescriptions[2].location = 2;                        // 位置位置
+        attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;    // 格式：vec2
+        attributeDescriptions[2].offset = offsetof(Vertex, texCoord); // 偏移量
+
         return attributeDescriptions;
     }
 };
@@ -111,10 +119,10 @@ struct UniformBufferObject
 };
 
 const std::vector<Vertex> g_vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
 
 const std::vector<uint32_t> g_indices = {
     0, 1, 2,
@@ -224,6 +232,11 @@ private:
     // 将buffer数据 复制到 image
     void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
+    void createTextureImageView();
+    VkImageView createImageView(VkImage image, VkFormat format);
+    void createImageView(); // 重载：对swapchain的每个image创建imageview
+    void createTextureSampler();
+
 private:
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory);
     void createVertexBuffer();
@@ -289,6 +302,9 @@ private:
 
     VkImage m_textureImage; // 纹理图像(句柄)
     VkDeviceMemory m_textureImageMemory;
+
+    VkImageView m_textureImageView; // 纹理图像视图
+    VkSampler m_textureSampler;     // 纹理采样器
 
 private:
     std::vector<VkSemaphore> m_imageAvailableSemaphores; // 图像可用信号
