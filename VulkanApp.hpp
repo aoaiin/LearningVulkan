@@ -29,6 +29,8 @@ VK_LAYER_LUNARG_threading: 线程验证层，检查多线程环境下的API使�
 
 const std::string pipelineCacheFile = "../cache/pipelineConfig.config"; // 管道缓存文件路径,最好先创建个空的
 
+const std::string TEXTURE_PATH = "../textures/texture.png";
+
 #ifdef NDEBUG
 const bool enabledValidationLayers = false;
 #else
@@ -198,9 +200,11 @@ private:
 
     void createCommandPool();
     void createCommandBuffer();
-    void BeginCommandBuffer(VkCommandBuffer &commandBuffer, VkCommandBufferUsageFlags flags = 0);
-    void EndCommandBuffer(VkCommandBuffer &commandBuffer);
+
+    void BeginCommandBuffer(VkCommandBuffer &commandBuffer, VkCommandBufferUsageFlags flags, bool isCreated);
+    void EndCommandBuffer(VkCommandBuffer &commandBuffer, bool isSubmited);
     void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t currentFrame);
+
     void DrawFrame();
 
 private:
@@ -210,6 +214,15 @@ private:
 
 private:
     void createSyncObjects();
+
+private:
+    void createTextureImage();
+    // 创建Image句柄，并分配内存
+    void createImage(VkImage &image, VkDeviceMemory &imageMemory, VkFormat format, VkImageType imageType, VkExtent3D extent, VkImageUsageFlags usage, uint32_t mipLevels, VkSampleCountFlagBits sampleCount);
+    // 转换Image布局
+    void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+    // 将buffer数据 复制到 image
+    void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
 private:
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory);
@@ -273,6 +286,9 @@ private:
     std::vector<VkBuffer> m_uniformBuffers;
     std::vector<VkDeviceMemory> m_uniformBuffersMemory;
     std::vector<void *> m_uniformBuffersData; // 映射后的指针
+
+    VkImage m_textureImage; // 纹理图像(句柄)
+    VkDeviceMemory m_textureImageMemory;
 
 private:
     std::vector<VkSemaphore> m_imageAvailableSemaphores; // 图像可用信号

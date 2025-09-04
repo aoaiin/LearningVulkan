@@ -1,6 +1,9 @@
 #include "VulkanApp.hpp"
 #include <algorithm>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 App::App()
     : App({800, 600, "Vulkan App"})
 {
@@ -73,6 +76,9 @@ void App::initVulkan()
     createFramebuffers();
 
     createCommandPool(); // 这里因为 创建 vertexBuffer 中有用到临时的复制命令缓冲区
+
+    createTextureImage();
+
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffer(); // 先创建统一缓冲区，然后创建描述符集，确保描述符集可以正确引用缓冲区
@@ -703,6 +709,10 @@ void App::cleanupALL()
 
 void App::cleanupVulkan()
 {
+    // 添加纹理图像清理
+    vkDestroyImage(m_LogicalDevice, m_textureImage, nullptr);
+    vkFreeMemory(m_LogicalDevice, m_textureImageMemory, nullptr);
+
     vkDestroyDescriptorPool(m_LogicalDevice, m_descriptorPool, nullptr);
     for (size_t i = 0; i < MAX_FRAMES; i++)
     {
@@ -927,20 +937,39 @@ void App::createCommandBuffer()
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // 主缓冲区中的命令可以直接提交到队列
+    // allocInfo.commandBufferCount = 1;
     allocInfo.commandBufferCount = (uint32_t)(m_commandBuffers.size());
     allocInfo.commandPool = m_commandPool;
 
-    for (uint32_t i = 0; i < MAX_FRAMES; i++)
+    if (vkAllocateCommandBuffers(m_LogicalDevice, &allocInfo, m_commandBuffers.data()) != VK_SUCCESS)
     {
-        if (vkAllocateCommandBuffers(m_LogicalDevice, &allocInfo, &m_commandBuffers[i]) != VK_SUCCESS)
+        throw std::runtime_error("failed to allocate command buffers!");
+    }
+
+    // for (uint32_t i = 0; i < MAX_FRAMES; i++)
+    // {
+    //     if (vkAllocateCommandBuffers(m_LogicalDevice, &allocInfo, &m_commandBuffers[i]) != VK_SUCCESS)
+    //     {
+    //         throw std::runtime_error("failed to allocate command buffer!");
+    //     }
+    // }
+}
+
+void App::BeginCommandBuffer(VkCommandBuffer &commandBuffer, VkCommandBufferUsageFlags flags, bool isCreated)
+{
+    if (isCreated)
+    {
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // 主缓冲区中的命令可以直接提交到队列
+        allocInfo.commandBufferCount = 1;
+        allocInfo.commandPool = m_commandPool;
+        if (vkAllocateCommandBuffers(m_LogicalDevice, &allocInfo, &commandBuffer) != VK_SUCCESS)
         {
             throw std::runtime_error("failed to allocate command buffer!");
         }
     }
-}
 
-void App::BeginCommandBuffer(VkCommandBuffer &commandBuffer, VkCommandBufferUsageFlags flags)
-{
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = flags;              // 描述命令缓冲区的使用方式/行为
@@ -952,11 +981,27 @@ void App::BeginCommandBuffer(VkCommandBuffer &commandBuffer, VkCommandBufferUsag
     }
 }
 
-void App::EndCommandBuffer(VkCommandBuffer &commandBuffer)
+void App::EndCommandBuffer(VkCommandBuffer &commandBuffer, bool isSubmited)
 {
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to record command buffer!");
+    }
+    if (isSubmited)
+    {
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &commandBuffer; // 提交的命令缓冲区
+
+        // 提交命令缓冲区到 图形队列
+        if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to submit draw command buffer!");
+        }
+
+        vkDeviceWaitIdle(m_LogicalDevice);
+        vkFreeCommandBuffers(m_LogicalDevice, m_commandPool, 1, &commandBuffer);
     }
 }
 
@@ -964,7 +1009,7 @@ void App::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex
 {
     // 在传入的 commandBuffer 上 记录命令
     // 以定义的 Begin/EndCommandBuffer 函数为准
-    BeginCommandBuffer(commandBuffer, 0);
+    BeginCommandBuffer(commandBuffer, 0, false);
     //----------------------------------------------------------------
 
     VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
@@ -1019,7 +1064,7 @@ void App::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex
 
     //----------------------------------------------------------------
     // 结束命令缓冲区的记录
-    EndCommandBuffer(commandBuffer);
+    EndCommandBuffer(commandBuffer, false);
 }
 
 void App::DrawFrame()
@@ -1212,6 +1257,170 @@ void App::createSyncObjects()
     }
 }
 
+void App::createTextureImage()
+{
+    int texWidth, texHeight, texChannels;
+    stbi_uc *pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    VkDeviceSize imageSize = texWidth * texHeight * 4;
+
+    if (!pixels)
+    {
+        throw std::runtime_error("failed to load texture image!");
+    }
+
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    // 创建暂存区
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    createBuffer(imageSize, usage, properties, stagingBuffer, stagingBufferMemory);
+    // 上传像素数据到 data/暂存区
+    void *data;
+    vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
+    memcpy(data, pixels, static_cast<size_t>(imageSize));
+    vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
+
+    stbi_image_free(pixels);
+    //------------------------------------------------
+
+    // 创建 image，分配内存，绑定内存
+    createImage(m_textureImage, m_textureImageMemory, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TYPE_2D,
+                {static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1},
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                1, VK_SAMPLE_COUNT_1_BIT);
+
+    //------------------------------------------------
+    // 将 暂存区数据 复制到 image
+    // 1. 转换 image layout： undefined -> 目标
+    transitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    // 2. 复制
+    copyBufferToImage(stagingBuffer, m_textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+    // 3. 再次转换: 目标 -> shader只读
+    transitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    //------------------------------------------------
+
+    // 清理暂存区
+    vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
+    vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
+}
+
+void App::createImage(VkImage &image, VkDeviceMemory &imageMemory, VkFormat format, VkImageType imageType, VkExtent3D extent, VkImageUsageFlags usage, uint32_t mipLevels, VkSampleCountFlagBits sampleCount)
+{
+    // 创建图像(句柄)
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.format = format;
+    imageInfo.imageType = imageType;
+    imageInfo.extent = extent;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL; // 像素存储方式
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = usage;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // 独占
+    imageInfo.mipLevels = mipLevels;
+    imageInfo.samples = sampleCount;
+    imageInfo.arrayLayers = 1;
+
+    if (vkCreateImage(m_LogicalDevice, &imageInfo, nullptr, &image) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create image!");
+    }
+
+    // 分配内存
+    VkMemoryRequirements memRequirements;
+    vkGetImageMemoryRequirements(m_LogicalDevice, image, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    if (vkAllocateMemory(m_LogicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to allocate image memory!");
+    }
+
+    // 绑定内存
+    vkBindImageMemory(m_LogicalDevice, image, imageMemory, 0);
+}
+
+void App::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+{
+    VkCommandBuffer commandBuffer;
+    BeginCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, true);
+
+    VkImageMemoryBarrier barrier{}; // 同步资源
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.image = image;
+    barrier.oldLayout = oldLayout;
+    barrier.newLayout = newLayout;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.srcAccessMask = 0; // TODO
+    barrier.dstAccessMask = 0; // TODO
+
+    VkPipelineStageFlags srcStage, dstStage;
+
+    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+    {
+        barrier.srcAccessMask = 0; // VK_ACCESS_HOST_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+        srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    // else
+    // {
+    //     throw std::invalid_argument("unsupported layout transition!");
+    // }
+
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        srcStage, dstStage,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &barrier);
+
+    EndCommandBuffer(commandBuffer, true);
+}
+
+void App::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+{
+    VkCommandBuffer commandBuffer;
+    BeginCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, true);
+
+    VkBufferImageCopy region{};
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.bufferOffset = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {0, 0, 0};
+    region.imageExtent = {width, height, 1};
+
+    // 命令：buffer->image ,
+    // image的layout 必须是 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    EndCommandBuffer(commandBuffer, true);
+}
+
 void App::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory)
 {
     // 1. 创建缓冲区
@@ -1348,16 +1557,17 @@ void App::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
         throw std::runtime_error("failed to allocate command buffers!");
     }
 
+    // ---------------------------- 可以看到这里前后 手动分配commandbuffer，所以参数里面是 false ----------------------------
     // 开始记录命令
-    BeginCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
+    BeginCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, false);
     VkBufferCopy copyRegion{};
     copyRegion.srcOffset = 0; // Optional
     copyRegion.dstOffset = 0; // Optional
     copyRegion.size = size;
     vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
     // 结束命令缓冲区的记录
-    EndCommandBuffer(commandBuffer);
+    EndCommandBuffer(commandBuffer, false);
+    //------------------------------------------------------------------------------------
 
     // 提交命令缓冲区
     VkSubmitInfo submitInfo{};
