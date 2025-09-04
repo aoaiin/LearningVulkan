@@ -6,7 +6,11 @@
 #include <set>
 #include <array>
 #include <fstream>
+#include <chrono>
+
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_INCLUDE_VULKAN
@@ -96,6 +100,14 @@ struct Vertex
         return attributeDescriptions;
     }
 };
+
+struct UniformBufferObject
+{
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+};
+
 const std::vector<Vertex> g_vertices = {
     {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
     {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
@@ -188,8 +200,13 @@ private:
     void createCommandBuffer();
     void BeginCommandBuffer(VkCommandBuffer &commandBuffer, VkCommandBufferUsageFlags flags = 0);
     void EndCommandBuffer(VkCommandBuffer &commandBuffer);
-    void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t currentFrame);
     void DrawFrame();
+
+private:
+    void createDescriptorSetLayout();
+    void createDescriptorPool();
+    void createDescriptorSets();
 
 private:
     void createSyncObjects();
@@ -198,6 +215,9 @@ private:
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory);
     void createVertexBuffer();
     void createIndexBuffer();
+    void createUniformBuffer();
+
+    void updateUniformBuffer(uint32_t currentFrame);
 
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
@@ -240,6 +260,21 @@ private:
     std::vector<VkCommandBuffer> m_commandBuffers;
 
 private:
+    VkDescriptorSetLayout m_descriptorSetLayout;
+    VkDescriptorPool m_descriptorPool;
+    std::vector<VkDescriptorSet> m_descriptorSets; // 每个帧一个描述符集
+
+private:
+    VkBuffer m_vertexBuffer;             // buffer是一个抽象的概念，是一个缓冲区的句柄
+    VkDeviceMemory m_vertexBufferMemory; // memory是实际存储数据的物理内存
+    VkBuffer m_indexBuffer;
+    VkDeviceMemory m_indexBufferMemory;
+    // 帧数对应的 uniform buffer
+    std::vector<VkBuffer> m_uniformBuffers;
+    std::vector<VkDeviceMemory> m_uniformBuffersMemory;
+    std::vector<void *> m_uniformBuffersData; // 映射后的指针
+
+private:
     std::vector<VkSemaphore> m_imageAvailableSemaphores; // 图像可用信号
     std::vector<VkSemaphore> m_renderFinishedSemaphores; // 渲染完成信号
     std::vector<VkFence> m_inFlightFences;               // 同步栅栏
@@ -250,13 +285,7 @@ private:
     // 图像
     std::vector<VkImage> m_swapChainImages; // 交换链中的 VkImage 句柄数组
     std::vector<VkImageView> m_swapChainImageViews;
-    std::vector<VkFramebuffer> m_swapChainFramebuffers;
-
-private:
-    VkBuffer m_vertexBuffer;             // buffer是一个抽象的概念，是一个缓冲区的句柄
-    VkDeviceMemory m_vertexBufferMemory; // memory是实际存储数据的物理内存
-    VkBuffer m_indexBuffer;
-    VkDeviceMemory m_indexBufferMemory;
+    std::vector<VkFramebuffer> m_swapChainFramebuffers; // 交换链帧缓冲区：每个图像一个帧缓冲区
 
 private:
     queueFamily m_queueFamily;

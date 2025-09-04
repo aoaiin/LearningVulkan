@@ -492,3 +492,34 @@ createVertexBuffer：调用 createbuffer 创建 暂存、vertex 缓冲区，data
 
 和 createVertexBuffer 类似的；
 记得在 DrawFrame 的 record 命令中：绑定索引缓冲区；然后使用 drawindexed 代替原来的 draw
+
+---
+
+## 旋转矩形 : uniform , 描述符机制
+
+UBO 统一缓冲对象 是存储全局变量的缓冲区（cpu 和 gpu 之间传递全局数据） ，通过**描述符机制**让着色器访问
+
+描述符机制
+
+1. 描述符集布局 (descriptor set layout)：定义资源访问**规则**,着色器如何访问资源
+2. 描述符池 pool：基于规则(布局)分配资源 **(提供资源)**
+3. 描述符集 ：描述符的集合 ，**描述符(绑定资源的实例)**
+
+实现：
+
+1. 定义 Uniform 结构体
+2. 定义 create: 描述符集 布局、描述符池、描述符集；
+   > 先调用 创建统一缓冲区，然后创建描述符集，确保描述符集可以正确引用缓冲区
+3. 创建 uniformbuffer 对象：
+   VkBuffer、memory、void\* data ：根据 maxframe 数量（每个帧都有一个）
+
+4. UpdateUniformBuffer：创建一个结构体对象，更新，然后复制到 void\*映射数据中
+
+> 注意：
+>
+> 1. 创建的**描述符集布局 layout** 需要在创建图形管线布局时 设置
+> 2. **描述符集绑定** 需要在绑定 顶点\索引缓冲区 后（在绘制 DrawIndexed 命令之前）：RecordCommandBuffer 中
+> 3. **更新 UB 数据** 需要在 提交命令缓冲区之前 （感觉写在 DrawIndexed 命令之前也行？？？？）
+
+> 这里变换的时候，proj 矩阵对 y 轴反转了，所以在图形管线的光栅化器设置中，三角形正面重新设置了
+> 注意 创建、销毁的顺序
