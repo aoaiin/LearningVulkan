@@ -190,7 +190,10 @@ private:
     void createSyncObjects();
 
 private:
+    void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory);
     void createVertexBuffer();
+
+    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
     // 找到合适的内存类型：filter是内存类型位掩码，properties是内存属性要求
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
@@ -208,7 +211,6 @@ private:
         void *pUserData);
 
     static void framebufferResizeCallback(GLFWwindow *window, int width, int height);
-
 
 private:
     windowInfo w_info;

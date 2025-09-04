@@ -480,3 +480,10 @@ VkDeviceMemory ：memory 是实际存储数据的物理内存
 > 并且**在 Drawframe,RecordCommandBuffer 时，记得绑定顶点缓冲区**
 
 ### 更快的顶点缓冲
+
+> 这一节主要是将 缓冲区创建在设备本地内存中(gpu 显存)
+> 创建了一个 暂存缓冲区，将数据复制到暂存，创建 gpu 上的缓冲区，然后 copy
+> 注意：这需要有临时的 copy 命令/命令缓冲区/命令池，所以注意 Init 中创建顺序
+
+函数 CreateBuffer :抽象了一下，接受参数创建各种缓冲区
+createVertexBuffer：调用 createbuffer 创建 暂存、vertex 缓冲区，data 上传到暂存 ，copy，清理暂存缓冲区
