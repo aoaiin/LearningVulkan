@@ -72,6 +72,7 @@ void App::initVulkan()
 
     createCommandPool(); // 这里因为 创建 vertexBuffer 中有用到临时的复制命令缓冲区
     createVertexBuffer();
+    createIndexBuffer();
 
     createCommandBuffer();
     createSyncObjects();
@@ -696,6 +697,8 @@ void App::cleanupALL()
 
 void App::cleanupVulkan()
 {
+    vkDestroyBuffer(m_LogicalDevice, m_indexBuffer, nullptr);
+    vkFreeMemory(m_LogicalDevice, m_indexBufferMemory, nullptr);
     vkDestroyBuffer(m_LogicalDevice, m_vertexBuffer, nullptr);
     vkFreeMemory(m_LogicalDevice, m_vertexBufferMemory, nullptr);
     // 清理按帧分配的同步对象
@@ -964,10 +967,14 @@ void App::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
+    //----------------------------------------------------------------
     // 绑定顶点缓冲区
     VkBuffer vertexBuffers[] = {m_vertexBuffer};
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    // 绑定索引缓冲区
+    vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+    //----------------------------------------------------------------
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -983,7 +990,8 @@ void App::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex
     scissor.extent = m_swapChainImageExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0); // 绘制三角形
+    // vkCmdDraw(commandBuffer, 3, 1, 0, 0); // 绘制三角形
+    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(g_indices.size()), 1, 0, 0, 0); // 绘制索引
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -1129,7 +1137,7 @@ void App::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryProp
 void App::createVertexBuffer()
 {
     // 1. 创建一个 暂存缓冲区 Staging Buffer，用于把数据从 CPU 传输到 GPU
-    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+    VkDeviceSize bufferSize = sizeof(g_vertices[0]) * g_vertices.size();
     VkBufferUsageFlags stagingUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     VkMemoryPropertyFlags stagingProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer stagingBuffer;
@@ -1140,7 +1148,7 @@ void App::createVertexBuffer()
     // 2. 上传到 暂存缓冲区
     void *data;
     vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, vertices.data(), (size_t)bufferSize);
+    memcpy(data, g_vertices.data(), (size_t)bufferSize);
     vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
 
     // 3. 创建 设备(GPU)本地缓冲区 Vertex Buffer :
@@ -1151,6 +1159,27 @@ void App::createVertexBuffer()
     copyBuffer(stagingBuffer, m_vertexBuffer, bufferSize);
 
     // 5. 清理 暂存缓冲区
+    vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
+    vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
+}
+
+void App::createIndexBuffer()
+{
+    VkDeviceSize bufferSize = sizeof(g_indices[0]) * g_indices.size();
+
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+    void *data;
+    vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
+    memcpy(data, g_indices.data(), (size_t)bufferSize);
+    vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
+
+    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory);
+
+    copyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
+
     vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
     vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
 }

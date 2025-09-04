@@ -96,10 +96,15 @@ struct Vertex
         return attributeDescriptions;
     }
 };
-const std::vector<Vertex> vertices = {
-    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+const std::vector<Vertex> g_vertices = {
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
+
+const std::vector<uint32_t> g_indices = {
+    0, 1, 2,
+    2, 3, 0};
 
 struct SwapChainDetails
 {
@@ -192,6 +197,7 @@ private:
 private:
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory);
     void createVertexBuffer();
+    void createIndexBuffer();
 
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
@@ -249,6 +255,8 @@ private:
 private:
     VkBuffer m_vertexBuffer;             // buffer是一个抽象的概念，是一个缓冲区的句柄
     VkDeviceMemory m_vertexBufferMemory; // memory是实际存储数据的物理内存
+    VkBuffer m_indexBuffer;
+    VkDeviceMemory m_indexBufferMemory;
 
 private:
     queueFamily m_queueFamily;

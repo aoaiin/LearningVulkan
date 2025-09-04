@@ -487,3 +487,8 @@ VkDeviceMemory ：memory 是实际存储数据的物理内存
 
 函数 CreateBuffer :抽象了一下，接受参数创建各种缓冲区
 createVertexBuffer：调用 createbuffer 创建 暂存、vertex 缓冲区，data 上传到暂存 ，copy，清理暂存缓冲区
+
+## 索引缓冲区
+
+和 createVertexBuffer 类似的；
+记得在 DrawFrame 的 record 命令中：绑定索引缓冲区；然后使用 drawindexed 代替原来的 draw
