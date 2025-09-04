@@ -69,6 +69,7 @@ void App::initVulkan()
     createGraphicsPipeline();
 
     createFramebuffers();
+    createVertexBuffer();
 
     createCommandPool();
     createCommandBuffer();
@@ -694,6 +695,8 @@ void App::cleanupALL()
 
 void App::cleanupVulkan()
 {
+    vkDestroyBuffer(m_LogicalDevice, m_vertexBuffer, nullptr);
+    vkFreeMemory(m_LogicalDevice, m_vertexBufferMemory, nullptr);
     // 清理按帧分配的同步对象
     for (uint32_t i = 0; i < MAX_FRAMES; i++)
     {
@@ -959,6 +962,11 @@ void App::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
+    // 绑定顶点缓冲区
+    VkBuffer vertexBuffers[] = {m_vertexBuffer};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -1078,6 +1086,67 @@ void App::createSyncObjects()
             throw std::runtime_error("failed to create synchronization objects!");
         }
     }
+}
+
+void App::createVertexBuffer()
+{
+    // 1. 创建缓冲区
+    VkBufferCreateInfo bufferInfo{};
+    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = bufferSize;                         // 缓冲区大小
+    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT; // 用于 vertex buffer
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;   // 独占模式
+
+    if (vkCreateBuffer(m_LogicalDevice, &bufferInfo, nullptr, &m_vertexBuffer) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create vertex buffer!");
+    }
+
+    // 2. 分配内存
+    //      先获取设备分配内存的 要求
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_LogicalDevice, m_vertexBuffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT); // 需要的内存类型，需要的属性
+
+    if (vkAllocateMemory(m_LogicalDevice, &allocInfo, nullptr, &m_vertexBufferMemory) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to allocate vertex buffer memory!");
+    }
+
+    // 3. 绑定内存：buffer指向的memory
+    vkBindBufferMemory(m_LogicalDevice, m_vertexBuffer, m_vertexBufferMemory, 0);
+
+    // 4. 映射内存，并复制数据
+    void *data;
+    vkMapMemory(m_LogicalDevice, m_vertexBufferMemory, 0, bufferSize, 0, &data); // data与m_vertexBufferMemory关联
+    memcpy(data, vertices.data(), (size_t)bufferSize);                           // 将顶点数据复制到 data 指向的内存，同样复制到 m_vertexBufferMemory
+    vkUnmapMemory(m_LogicalDevice, m_vertexBufferMemory);                        // 解除映射
+}
+
+uint32_t App::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+    // 1. 获取 当前物理设备支持的内存类型
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
+    // 2. 找到合适的内存类型
+    // typeFilter: 哪些内存类型可用的掩码
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+    {
+        // 遍历所有的内存类型，找到合适的内存类型
+        //  (typeFilter & (1 << i) required 需要的类型
+        //  (memProperties.memoryTypes[i].propertyFlags & properties) == properties  支持的类型 属性是否符合要求
+        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+        {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("failed to find suitable memory type!");
 }
 
 void App::createGraphicsPipeline()

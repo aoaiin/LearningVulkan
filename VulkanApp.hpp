@@ -115,6 +115,11 @@ public:
     App(const windowInfo &window_info);
     ~App();
 
+private:
+    void cleanupALL();
+    void cleanupVulkan();
+    void cleanupWindow();
+
 public:
     void Run();
 
@@ -185,6 +190,12 @@ private:
     void createSyncObjects();
 
 private:
+    void createVertexBuffer();
+
+    // 找到合适的内存类型：filter是内存类型位掩码，properties是内存属性要求
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+private:
     static std::vector<char> readFile(const std::string &filepath);
     static void writeFile(const std::string &filepath, const std::vector<char> &data, size_t dataSize);
 
@@ -198,10 +209,6 @@ private:
 
     static void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
-private:
-    void cleanupALL();
-    void cleanupVulkan();
-    void cleanupWindow();
 
 private:
     windowInfo w_info;
@@ -236,6 +243,10 @@ private:
     std::vector<VkImage> m_swapChainImages; // 交换链中的 VkImage 句柄数组
     std::vector<VkImageView> m_swapChainImageViews;
     std::vector<VkFramebuffer> m_swapChainFramebuffers;
+
+private:
+    VkBuffer m_vertexBuffer;             // buffer是一个抽象的概念，是一个缓冲区的句柄
+    VkDeviceMemory m_vertexBufferMemory; // memory是实际存储数据的物理内存
 
 private:
     queueFamily m_queueFamily;

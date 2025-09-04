@@ -467,3 +467,16 @@ Attributes：每个属性的 location、fmt、offset
 
 ### 顶点缓冲区
 
+成员
+VkBuffer ：buffer 是一个抽象的概念，是一个缓冲区的句柄
+VkDeviceMemory ：memory 是实际存储数据的物理内存
+
+函数
+
+- 创建 vertexbuffer： buffercreateInfo、获取设备分配 vkbuffer 时的要求、填写 VkMemoryAllocateInfo，创建 memory，绑定 buffer 和 memory，映射：data 和 memory 映射，将数据从 vertex 数组中复制到 data/同步复制到了 memory，然后解除映射。
+- 寻找合适的内存类型：传入 内存类型，内存需要的属性
+
+> 注意 createvertexbuffer 的顺序
+> 并且**在 Drawframe,RecordCommandBuffer 时，记得绑定顶点缓冲区**
+
+### 更快的顶点缓冲
