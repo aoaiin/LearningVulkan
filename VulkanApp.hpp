@@ -4,9 +4,15 @@
 #include <vector>
 #include <optional>
 #include <set>
+#include <array>
+#include <fstream>
+#include <glm/glm.hpp>
 
+#define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_INCLUDE_VULKAN
 #include <glfw/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <glfw/glfw3native.h>
 
 /*
 VK_LAYER_KHRONOS_validation: 综合性验证层，包含多种验证功能
@@ -54,6 +60,46 @@ struct queueFamily
         return graphicsQueueFamily.has_value() && presentQueueFamily.has_value();
     }
 };
+
+struct Vertex
+{
+    glm::vec2 pos;
+    glm::vec3 color;
+    // 这里类似将VA分离了：顶点、顶点属性 的描述
+    // 整个Vertex结构的描述
+    static VkVertexInputBindingDescription getBindingDescription()
+    {
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding = 0;                             // 绑定索引（顶点缓冲区的绑定点，哪个buffer）
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // 输入速率：按顶点
+        bindingDescription.stride = sizeof(Vertex);                 // 步幅：每个顶点的字节大小
+
+        return bindingDescription;
+    }
+    // 各个属性的描述
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+    {
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+        // 位置属性
+        attributeDescriptions[0].binding = 0;                      // 绑定索引
+        attributeDescriptions[0].location = 0;                     // 位置位置（shader中的location，都来自同一个buffer）
+        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT; // 格式：vec2
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);   // 偏移量
+
+        // 颜色属性
+        attributeDescriptions[1].binding = 0;                         // 绑定索引
+        attributeDescriptions[1].location = 1;                        // 位置位置
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; // 格式：vec3
+        attributeDescriptions[1].offset = offsetof(Vertex, color);    // 偏移量
+
+        return attributeDescriptions;
+    }
+};
+const std::vector<Vertex> vertices = {
+    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
 
 struct SwapChainDetails
 {

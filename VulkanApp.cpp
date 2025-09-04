@@ -1,6 +1,5 @@
 #include "VulkanApp.hpp"
 #include <algorithm>
-#include <fstream>
 
 App::App()
     : App({800, 600, "Vulkan App"})
@@ -1102,16 +1101,20 @@ void App::createGraphicsPipeline()
 
     VkPipelineShaderStageCreateInfo shaderStageCreateInfos[] = {vertexStageInfo, fragmentStageInfo};
 
+    auto bindingDescription = Vertex::getBindingDescription();
+    auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
     // --------------------------------------------------------------------
     // 固定功能状态
     // 1. 输入汇编器(Input Assembler)
     //      绑定描述符和属性描述符：指向输入的顶点缓冲区
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 0;
-    vertexInputInfo.pVertexBindingDescriptions = nullptr;
-    vertexInputInfo.vertexAttributeDescriptionCount = 0;
-    vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
     //      IA ：怎么读取图元/拓扑模式
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;

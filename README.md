@@ -452,3 +452,18 @@ commandbuffer、fence、信号量等等，都根据 最大处理的帧数量 创
    清理旧的：framebuffer、ImageViews、销毁 swapchain
    创建新的：swapchain、imageviews、framebuffer
    > framebuffer 中的 ImageView 来自 swapchain
+
+---
+
+## 顶点输入描述
+
+> 这里引入了 glm
+
+创建结构体 Vertex：包含 顶点的属性
+顶点的描述：
+分成了两部分：vertexBinding、vertexAttributes
+Binding 是整个 Vertex 结构体的描述、绑定哪个缓冲区；
+Attributes：每个属性的 location、fmt、offset
+
+### 顶点缓冲区
+

@@ -6,6 +6,7 @@ target_compile_features(cxx_std INTERFACE cxx_std_20)
 
 add_executable(vulkantest main.cpp VulkanApp.cpp)
 target_include_directories(vulkantest PUBLIC "glfw/include")
+target_include_directories(vulkantest PUBLIC "glm")
 target_include_directories(vulkantest PUBLIC "vulkanSDK/include")
 target_link_directories(vulkantest PUBLIC "glfw/lib")
 target_link_directories(vulkantest PUBLIC "vulkanSDK/lib")
