@@ -437,3 +437,18 @@ commandbuffer、fence、信号量等等，都根据 最大处理的帧数量 创
 > 注意：之前在创建 交换链的时候，它的 minImagecount 改成了物理设备 spec 提供的+1（双缓冲 交换链的图像，就变成了 3）
 > 这样在对图像的信号量索引的时候，会报错；
 > 改了好久才发现，现在把它改回去
+
+---
+
+## 调整窗口大小: 重新创建 swapchain
+
+1. glfw 设置 framebufferResizeCallback
+   设置 userpointer：为 App 自己
+
+2. 在 drawframe 中判断是否交换链是否过时：1. 获取下一个图像失败；2.呈现失败
+   调用 recreateSwapChain
+
+3. recreateSwapChain：获取 glfw 窗口大小（最小化的话就等待）
+   清理旧的：framebuffer、ImageViews、销毁 swapchain
+   创建新的：swapchain、imageviews、framebuffer
+   > framebuffer 中的 ImageView 来自 swapchain

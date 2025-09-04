@@ -104,6 +104,8 @@ private:
     void createSurface();
 
     void createSwapChain();
+    void recreateSwapChain();
+    void cleanupSwapChain(); // 清理ImageViews、swapchain、framebuffers
     // 查询交换链支持情况（获取相关信息）
     SwapChainDetails querySwapChainSupport(VkPhysicalDevice device);
     VkSurfaceCapabilitiesKHR GetSurfaceCap(VkPhysicalDevice device);
@@ -114,8 +116,8 @@ private:
     VkPresentModeKHR choosePresentMode(const SwapChainDetails &details);
     VkExtent2D chooseSwapExtent(const SwapChainDetails &details);
 
-    void GetSwapChainImages(std::vector<VkImage> &images);
     void createImageViews();
+    void GetSwapChainImages(std::vector<VkImage> &images); // 在创建ImageViews之前，先获取交换链图像
 
     // 创建 管线布局layout、图形管线
     void createGraphicsPipeline();
@@ -147,6 +149,8 @@ private:
         VkDebugUtilsMessageTypeFlagsEXT messageType,               // 消息类型
         const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, // 回调数据/消息信息
         void *pUserData);
+
+    static void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
 private:
     void cleanupALL();
@@ -189,4 +193,5 @@ private:
 
 private:
     queueFamily m_queueFamily;
+    bool m_framebufferResized = false; // 窗口是否被调整过大小
 };

@@ -39,8 +39,7 @@ void App::initWindow()
 
     // 不产生opengl相关内容
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    // 禁用窗口大小调整
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
     window = glfwCreateWindow(w_info.width, w_info.height, w_info.title.c_str(), nullptr, nullptr);
 
@@ -48,6 +47,9 @@ void App::initWindow()
     {
         throw std::runtime_error("glfw create window failed!");
     }
+
+    glfwSetWindowUserPointer(window, this);
+    glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 }
 
 void App::initVulkan()
@@ -61,7 +63,7 @@ void App::initVulkan()
     createLogicalDevice();
     createSwapChain();
 
-    GetSwapChainImages(m_swapChainImages);
+    // GetSwapChainImages(m_swapChainImages); //放入createImageViews
     createImageViews();
 
     createRenderPass();
@@ -501,6 +503,41 @@ void App::createSwapChain()
     m_swapChainImageExtent = swapExtent;
 }
 
+void App::recreateSwapChain()
+{
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    while (width == 0 || height == 0) // 窗口被最小化了，glfwWaitEvents等待
+    {
+        glfwGetFramebufferSize(window, &width, &height);
+        glfwWaitEvents();
+    }
+
+    vkDeviceWaitIdle(m_LogicalDevice); // 等待当前操作完成
+
+    cleanupSwapChain(); // 清理旧的交换链相关内容
+
+    createSwapChain();
+    // GetSwapChainImages(m_swapChainImages);
+    createImageViews();
+    createFramebuffers();
+}
+
+void App::cleanupSwapChain()
+{
+    for (auto framebuffer : m_swapChainFramebuffers)
+    {
+        vkDestroyFramebuffer(m_LogicalDevice, framebuffer, nullptr);
+    }
+
+    for (auto imageView : m_swapChainImageViews)
+    {
+        vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
+    }
+
+    vkDestroySwapchainKHR(m_LogicalDevice, m_swapChain, nullptr);
+}
+
 SwapChainDetails App::querySwapChainSupport(VkPhysicalDevice device)
 {
     SwapChainDetails details;
@@ -604,6 +641,8 @@ void App::GetSwapChainImages(std::vector<VkImage> &images)
 
 void App::createImageViews()
 {
+    GetSwapChainImages(m_swapChainImages);
+
     m_swapChainImageViews.resize(m_swapChainImages.size());
 
     for (int i = 0; i < m_swapChainImageViews.size(); i++)
@@ -640,6 +679,12 @@ VKAPI_ATTR VkBool32 VKAPI_CALL App::debugCallback(VkDebugUtilsMessageSeverityFla
         return VK_TRUE;
     }
     return VK_FALSE;
+}
+
+void App::framebufferResizeCallback(GLFWwindow *window, int width, int height)
+{
+    auto app = reinterpret_cast<App *>(glfwGetWindowUserPointer(window));
+    app->m_framebufferResized = true;
 }
 
 void App::cleanupALL()
@@ -942,21 +987,23 @@ void App::DrawFrame()
     static uint32_t currentFrame = 0;
     // 1. 等待 上一帧 渲染完成
     vkWaitForFences(m_LogicalDevice, 1, &m_inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-    vkResetFences(m_LogicalDevice, 1, &m_inFlightFences[currentFrame]);
 
     // 2. 获取交换链图像索引
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(m_LogicalDevice, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
-    // if (result == VK_ERROR_OUT_OF_DATE_KHR)
-    // {
-    //     // 交换链过时了，重新创建
-    //     // recreateSwapChain();
-    //     return;
-    // }
-    // else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-    // {
-    //     throw std::runtime_error("failed to acquire swap chain image!");
-    // }
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+    {
+        // 交换链过时了，重新创建
+        recreateSwapChain();
+        return;
+    }
+    else if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to acquire swap chain image!");
+    }
+
+    // 需要重新创建完交换链，才reset
+    vkResetFences(m_LogicalDevice, 1, &m_inFlightFences[currentFrame]);
 
     // 3. 重置命令缓冲区，记录命令
     vkResetCommandBuffer(m_commandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
@@ -995,7 +1042,16 @@ void App::DrawFrame()
     presentInfo.pImageIndices = &imageIndex;
     presentInfo.pResults = nullptr; // Optional
 
-    vkQueuePresentKHR(m_presentQueue, &presentInfo);
+    result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_framebufferResized)
+    {
+        recreateSwapChain();
+        m_framebufferResized = false;
+    }
+    else if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to present swap chain image!");
+    }
 
     currentFrame = (currentFrame + 1) % MAX_FRAMES;
 }
