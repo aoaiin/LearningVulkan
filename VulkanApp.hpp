@@ -69,7 +69,7 @@ struct queueFamily
 
 struct Vertex
 {
-    glm::vec2 pos;
+    glm::vec3 pos;
     glm::vec3 color;
     glm::vec2 texCoord;
 
@@ -90,10 +90,10 @@ struct Vertex
         std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
 
         // 位置属性
-        attributeDescriptions[0].binding = 0;                      // 绑定索引
-        attributeDescriptions[0].location = 0;                     // 位置位置（shader中的location，都来自同一个buffer）
-        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT; // 格式：vec2
-        attributeDescriptions[0].offset = offsetof(Vertex, pos);   // 偏移量
+        attributeDescriptions[0].binding = 0;                         // 绑定索引
+        attributeDescriptions[0].location = 0;                        // 位置位置（shader中的location，都来自同一个buffer）
+        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // 格式：vec3
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);      // 偏移量
 
         // 颜色属性
         attributeDescriptions[1].binding = 0;                         // 绑定索引
@@ -119,14 +119,20 @@ struct UniformBufferObject
 };
 
 const std::vector<Vertex> g_vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
+    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+    {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+
+    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
 
 const std::vector<uint32_t> g_indices = {
-    0, 1, 2,
-    2, 3, 0};
+    0, 1, 2, 2, 3, 0,
+    4, 5, 6, 6, 7, 4,
+};
 
 struct SwapChainDetails
 {
@@ -233,7 +239,7 @@ private:
     void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
     void createTextureImageView();
-    VkImageView createImageView(VkImage image, VkFormat format);
+    VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
     void createImageView(); // 重载：对swapchain的每个image创建imageview
     void createTextureSampler();
 
@@ -249,6 +255,14 @@ private:
 
     // 找到合适的内存类型：filter是内存类型位掩码，properties是内存属性要求
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+    // 查找支持的格式: 预期的格式、图像像素存储方式、需要的特性
+    VkFormat findSupportedFormat(const std::vector<VkFormat> &candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+
+private:
+    void createDepthResources();
+    VkFormat findDepthFormat();
+    bool hasStencilComponent(VkFormat format);
 
 private:
     static std::vector<char> readFile(const std::string &filepath);
@@ -305,6 +319,11 @@ private:
 
     VkImageView m_textureImageView; // 纹理图像视图
     VkSampler m_textureSampler;     // 纹理采样器
+
+private:
+    VkImage m_depthImage;              // 深度图像
+    VkDeviceMemory m_depthImageMemory; // 深度图像内存
+    VkImageView m_depthImageView;      // 深度图像视图
 
 private:
     std::vector<VkSemaphore> m_imageAvailableSemaphores; // 图像可用信号
