@@ -4,12 +4,20 @@ project(mytest LANGUAGES CXX VERSION 1.0.0)
 add_library(cxx_std INTERFACE)
 target_compile_features(cxx_std INTERFACE cxx_std_20)
 
-add_executable(vulkantest main.cpp VulkanApp.cpp)
-target_include_directories(vulkantest PUBLIC "glfw/include")
-target_include_directories(vulkantest PUBLIC "glm")
-target_include_directories(vulkantest PUBLIC "stb_image")
+add_executable(vulkantest
+    main.cpp
+    VulkanApp.cpp
+    Base.h
+    stb_image/stb_image.cpp)
 
-target_include_directories(vulkantest PUBLIC "vulkanSDK/include")
+target_include_directories(vulkantest PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    "glfw/include"
+    "glm"
+    "stb_image"
+    "vulkanSDK/include"
+)
+
 target_link_directories(vulkantest PUBLIC "glfw/lib")
 target_link_directories(vulkantest PUBLIC "vulkanSDK/lib")
 target_link_libraries(vulkantest PUBLIC cxx_std glfw3 vulkan-1)

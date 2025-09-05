@@ -1,8 +1,4 @@
 #include "VulkanApp.hpp"
-#include <algorithm>
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 
 App::App()
     : App({800, 600, "Vulkan App"})

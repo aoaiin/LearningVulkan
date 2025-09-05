@@ -1,22 +1,6 @@
-#include <iostream>
-#include <string>
-#include <cstring>
-#include <vector>
-#include <optional>
-#include <set>
-#include <array>
-#include <fstream>
-#include <chrono>
+#pragma once
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-
-#define VK_USE_PLATFORM_WIN32_KHR
-#define GLFW_INCLUDE_VULKAN
-#include <glfw/glfw3.h>
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <glfw/glfw3native.h>
+#include "Base.h"
 
 /*
 VK_LAYER_KHRONOS_validation: 综合性验证层，包含多种验证功能
@@ -130,8 +114,18 @@ const std::vector<Vertex> g_vertices = {
     {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
 
 const std::vector<uint32_t> g_indices = {
-    0, 1, 2, 2, 3, 0,
-    4, 5, 6, 6, 7, 4,
+    0,
+    1,
+    2,
+    2,
+    3,
+    0,
+    4,
+    5,
+    6,
+    6,
+    7,
+    4,
 };
 
 struct SwapChainDetails
